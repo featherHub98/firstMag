@@ -84,6 +84,7 @@ pub fn run() {
             commands::fiscal_cmds::fiscal_rsz,
             commands::fiscal_cmds::fiscal_ruz,
             commands::fiscal_cmds::fiscal_reset,
+            commands::dashboard_cmds::get_dashboard_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

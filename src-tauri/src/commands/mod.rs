@@ -5,3 +5,4 @@ pub mod partner_cmds;
 pub mod stock_cmds;
 pub mod report_cmds;
 pub mod fiscal_cmds;
+pub mod dashboard_cmds;

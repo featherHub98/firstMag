@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Outlet, NavLink } from "react-router-dom";
 import {
+  LayoutDashboard,
   CreditCard,
   FileText,
   Package,
@@ -46,6 +47,7 @@ import StatusBar from "./StatusBar";
 import LoginModal from "./LoginModal";
 
 const navItems = [
+  { to: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
   { to: "/pos", label: "Caisse", icon: CreditCard },
   { to: "/sales", label: "Ventes", icon: FileText },
   { to: "/stock", label: "Stock", icon: Package },

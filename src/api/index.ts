@@ -5,6 +5,7 @@ export * from "./posApi";
 export * from "./stockApi";
 export * from "./reportApi";
 export * from "./fiscalApi";
+export * from "./dashboardApi";
 
 export function millimesToDinars(m: number): number {
   return m / 1000;

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import Layout from "./components/Layout";
+import DashboardPage from "./pages/DashboardPage";
 import PosPage from "./pages/PosPage";
 import SalesPage from "./pages/SalesPage";
 import StockPage from "./pages/StockPage";
@@ -28,7 +29,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route element={<Layout />}>
-            <Route path="/" element={<Navigate to="/pos" replace />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/pos" element={<PosPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/stock" element={<StockPage />} />
