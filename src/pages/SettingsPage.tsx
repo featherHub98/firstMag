@@ -1,8 +1,28 @@
-import { useState, useEffect } from "react";
-import { getOpenSession, openSession, closeSession, fiscalConnect, fiscalDisconnect, fiscalCpx, fiscalCpm, fiscalCpb, fiscalRsx, fiscalRsz, fiscalRuz, fiscalReset } from "../api";
+import * as React from "react";
+import {
+  Wallet,
+  Receipt as FiscalIcon,
+  Building2,
+  Percent,
+  Hash,
+  Power,
+  PowerOff,
+  Printer,
+  FileBarChart,
+  RefreshCcw,
+} from "lucide-react";
+import { getOpenSession, openSession, closeSession, fiscalConnect, fiscalDisconnect, fiscalCpx, fiscalCpm, fiscalCpb, fiscalRsx, fiscalRsz, fiscalRuz, fiscalReset, fmtDinars, dinarsToMillimes } from "../api";
 import { useSessionStore } from "../stores/sessionStore";
 import { useToastStore } from "../api/toastStore";
 import type { PosSession } from "../types";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 
 const DEFAULT_TAXES = [
   { name: "TVA 19%", rate: 19 },
@@ -12,23 +32,25 @@ const DEFAULT_TAXES = [
 ];
 
 const DEFAULT_SERIES = [
-  { type: "invoice", prefix: "FACT-" },
-  { type: "quote", prefix: "DEV-" },
-  { type: "order", prefix: "CMD-" },
-  { type: "delivery", prefix: "BL-" },
+  { type: "Facture", prefix: "FACT-" },
+  { type: "Devis", prefix: "DEV-" },
+  { type: "Commande", prefix: "CMD-" },
+  { type: "Bon de livraison", prefix: "BL-" },
 ];
 
 export default function SettingsPage() {
   const setRegisterOpen = useSessionStore((s) => s.setRegisterOpen);
-  const [session, setSession] = useState<PosSession | null>(null);
-  const [fund, setFund] = useState("10000");
-  const [closingFund, setClosingFund] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [session, setSession] = React.useState<PosSession | null>(null);
+  const [fund, setFund] = React.useState("10.000");
+  const [closingFund, setClosingFund] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
   const addToast = useToastStore((s) => s.addToast);
-  const [company, setCompany] = useState({ name: "FIRST MAG", address: "", phone: "", tax_id: "" });
-  const [activeTab, setActiveTab] = useState("register");
+  const [company, setCompany] = React.useState({ name: "FIRST MAG", address: "", phone: "", tax_id: "" });
+  const [fiscalPort, setFiscalPort] = React.useState("COM1");
+  const [fiscalConnected, setFiscalConnected] = React.useState(false);
+  const [fiscalStatus, setFiscalStatus] = React.useState("");
 
-  useEffect(() => { checkSession(); }, []);
+  React.useEffect(() => { checkSession(); }, []);
 
   async function checkSession() {
     try { const s = await getOpenSession(); setSession(s); setRegisterOpen(!!s, s?.id); }
@@ -38,7 +60,7 @@ export default function SettingsPage() {
   async function handleOpen() {
     setLoading(true);
     try {
-      const s = await openSession("1", parseInt(fund) || 0);
+      const s = await openSession("1", dinarsToMillimes(parseFloat(fund) || 0));
       setSession(s); setRegisterOpen(true, s.id);
       addToast("Session ouverte", "success");
     } catch (e) { addToast(String(e), "error"); }
@@ -49,16 +71,12 @@ export default function SettingsPage() {
     if (!session) return;
     setLoading(true);
     try {
-      const s = await closeSession(session.id, parseInt(closingFund) || 0);
+      const s = await closeSession(session.id, dinarsToMillimes(parseFloat(closingFund) || 0));
       setSession(s); setRegisterOpen(false);
       addToast("Session fermée", "success");
     } catch (e) { addToast(String(e), "error"); }
     setLoading(false);
   }
-
-  const [fiscalPort, setFiscalPort] = useState("COM1");
-  const [fiscalConnected, setFiscalConnected] = useState(false);
-  const [fiscalStatus, setFiscalStatus] = useState("");
 
   async function handleFiscalConnect() {
     try {
@@ -83,142 +101,213 @@ export default function SettingsPage() {
     } catch (e) { addToast(String(e), "error"); }
   }
 
-  const tabs = [
-    { id: "register", label: "Caisse" },
-    { id: "fiscal", label: "Fiscale" },
-    { id: "company", label: "Société" },
-    { id: "taxes", label: "TVA" },
-    { id: "series", label: "Séries" },
-  ];
-
   return (
-    <div className="p-4 lg:p-6">
-      <h1 className="text-2xl font-bold mb-4">Configuration</h1>
+    <div className="p-4 md:p-6 h-full overflow-y-auto">
+      <PageHeader
+        title="Configuration"
+        description="Gérez la caisse, la caisse fiscale, votre société et les séries de numérotation"
+      />
 
-      <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
-        {tabs.map((t) => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`touch-button px-4 h-9 rounded-lg text-sm font-medium whitespace-nowrap ${
-              activeTab === t.id
-                ? "bg-blue-600 text-white"
-                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs defaultValue="register" className="space-y-4">
+        <TabsList className="grid w-full max-w-2xl grid-cols-2 sm:grid-cols-5">
+          <TabsTrigger value="register" className="gap-1.5"><Wallet className="size-4" />Caisse</TabsTrigger>
+          <TabsTrigger value="fiscal" className="gap-1.5"><FiscalIcon className="size-4" />Fiscale</TabsTrigger>
+          <TabsTrigger value="company" className="gap-1.5"><Building2 className="size-4" />Société</TabsTrigger>
+          <TabsTrigger value="taxes" className="gap-1.5"><Percent className="size-4" />TVA</TabsTrigger>
+          <TabsTrigger value="series" className="gap-1.5"><Hash className="size-4" />Séries</TabsTrigger>
+        </TabsList>
 
-      <div className="max-w-lg space-y-4">
-        {activeTab === "register" && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-            <h2 className="font-bold text-lg mb-3">Gestion de caisse</h2>
-            {session?.status === "open" ? (
-              <div>
-                <p className="text-sm text-slate-500 mb-3">Session ouverte depuis {new Date(session.opened_at).toLocaleString()}</p>
-                <p className="text-sm mb-2">Ticket #{session.ticket_count} &middot; Total {(session.total_sales / 1000).toFixed(3)} D</p>
-                <input type="number" value={closingFund} onChange={(e) => setClosingFund(e.target.value)}
-                  placeholder="Fonds de clôture (millimes)" className="w-full h-10 rounded-lg px-3 mb-2 bg-slate-50 dark:bg-slate-700 border border-slate-300" />
-                <button onClick={handleClose} disabled={loading}
-                  className="touch-button w-full h-12 rounded-xl bg-red-600 text-white font-bold disabled:opacity-50">
-                  {loading ? "Fermeture..." : "Fermer la caisse"}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-slate-500 mb-3">Caisse fermée</p>
-                <input type="number" value={fund} onChange={(e) => setFund(e.target.value)}
-                  placeholder="Fonds d'ouverture (millimes)" className="w-full h-10 rounded-lg px-3 mb-2 bg-slate-50 dark:bg-slate-700 border border-slate-300" />
-                <button onClick={handleOpen} disabled={loading}
-                  className="touch-button w-full h-12 rounded-xl bg-green-600 text-white font-bold disabled:opacity-50">
-                  {loading ? "Ouverture..." : "Ouvrir la caisse"}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "fiscal" && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-            <h2 className="font-bold text-lg mb-3">Caisse fiscale (QDRIVER)</h2>
-            <div className="flex gap-2 mb-3">
-              <input type="text" value={fiscalPort} onChange={(e) => setFiscalPort(e.target.value)}
-                className="flex-1 h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300" />
-              {!fiscalConnected ? (
-                <button onClick={handleFiscalConnect}
-                  className="touch-button h-10 px-4 rounded-lg bg-blue-600 text-white font-medium text-sm">Connecter</button>
+        <TabsContent value="register">
+          <Card className="max-w-xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Gestion de caisse
+                {session?.status === "open" ? (
+                  <Badge variant="success">Ouverte</Badge>
+                ) : (
+                  <Badge variant="secondary">Fermée</Badge>
+                )}
+              </CardTitle>
+              <CardDescription>Ouvrez ou fermez la session de caisse</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {session?.status === "open" ? (
+                <>
+                  <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
+                    <p><span className="text-muted-foreground">Ouverte depuis:</span> {new Date(session.opened_at).toLocaleString("fr-FR")}</p>
+                    <p><span className="text-muted-foreground">Tickets:</span> {session.ticket_count}</p>
+                    <p><span className="text-muted-foreground">Total ventes:</span> {fmtDinars(session.total_sales)} D</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="closingFund">Fonds de clôture (D)</Label>
+                    <Input
+                      id="closingFund"
+                      type="number"
+                      step="0.001"
+                      value={closingFund}
+                      onChange={(e) => setClosingFund(e.target.value)}
+                      placeholder="0.000"
+                    />
+                  </div>
+                  <Button onClick={handleClose} disabled={loading} variant="destructive" className="w-full">
+                    <PowerOff className="size-4" />
+                    {loading ? "Fermeture..." : "Fermer la caisse"}
+                  </Button>
+                </>
               ) : (
-                <button onClick={handleFiscalDisconnect}
-                  className="touch-button h-10 px-4 rounded-lg bg-red-600 text-white font-medium text-sm">Déconnecter</button>
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fund">Fonds d'ouverture (D)</Label>
+                    <Input
+                      id="fund"
+                      type="number"
+                      step="0.001"
+                      value={fund}
+                      onChange={(e) => setFund(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={handleOpen} disabled={loading} className="w-full">
+                    <Power className="size-4" />
+                    {loading ? "Ouverture..." : "Ouvrir la caisse"}
+                  </Button>
+                </>
               )}
-            </div>
-            {fiscalStatus && <p className="text-xs text-slate-500 mb-2">{fiscalStatus}</p>}
-            {fiscalConnected && (
-              <div className="flex flex-wrap gap-2">
-                <button onClick={handleFiscalTest}
-                  className="touch-button h-9 px-3 rounded-lg bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs font-medium">Test CPX→CPM→CPB</button>
-                <button onClick={async () => { try { const r = await fiscalRsx(1); addToast(`RSX: ${r}`, "success"); } catch (e) { addToast(String(e), "error"); } }}
-                  className="touch-button h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-600 text-xs font-medium">RSX</button>
-                <button onClick={async () => { try { const r = await fiscalRsz(1); addToast(`RSZ: ${r}`, "success"); } catch (e) { addToast(String(e), "error"); } }}
-                  className="touch-button h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-600 text-xs font-medium">RSZ</button>
-                <button onClick={async () => { try { const r = await fiscalRuz(); addToast(`RUz: ${r}`, "success"); } catch (e) { addToast(String(e), "error"); } }}
-                  className="touch-button h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-600 text-xs font-medium">RUz</button>
-              <button onClick={async () => { try { await fiscalReset(); addToast("Reset OK", "success"); } catch (e) { addToast(String(e), "error"); } }}
-                  className="touch-button h-9 px-3 rounded-lg bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs font-medium">Reset</button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="fiscal">
+          <Card className="max-w-xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Caisse fiscale (QDRIVER)
+                {fiscalConnected ? <Badge variant="success">Connectée</Badge> : <Badge variant="secondary">Déconnectée</Badge>}
+              </CardTitle>
+              <CardDescription>Connexion au périphérique fiscal via port série</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-1.5">
+                  <Label htmlFor="port">Port série</Label>
+                  <Input id="port" value={fiscalPort} onChange={(e) => setFiscalPort(e.target.value)} placeholder="COM1" />
+                </div>
+                <div className="flex items-end">
+                  {fiscalConnected ? (
+                    <Button onClick={handleFiscalDisconnect} variant="destructive">
+                      <PowerOff className="size-4" />
+                      Déconnecter
+                    </Button>
+                  ) : (
+                    <Button onClick={handleFiscalConnect}>
+                      <Power className="size-4" />
+                      Connecter
+                    </Button>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        )}
+              {fiscalStatus && (
+                <div className="rounded-lg bg-muted p-3 text-xs font-mono">{fiscalStatus}</div>
+              )}
+              {fiscalConnected && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-2">Commandes</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={handleFiscalTest}>
+                        <FileBarChart className="size-3.5" />
+                        Test CPX→CPM→CPB
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={async () => { try { const r = await fiscalRsx(1); addToast(`RSX: ${r}`, "success"); } catch (e) { addToast(String(e), "error"); } }}>
+                        <Printer className="size-3.5" /> RSX
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={async () => { try { const r = await fiscalRsz(1); addToast(`RSZ: ${r}`, "success"); } catch (e) { addToast(String(e), "error"); } }}>
+                        <FileBarChart className="size-3.5" /> RSZ
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={async () => { try { const r = await fiscalRuz(); addToast(`RUz: ${r}`, "success"); } catch (e) { addToast(String(e), "error"); } }}>
+                        <Printer className="size-3.5" /> RUz
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={async () => { try { await fiscalReset(); addToast("Reset OK", "success"); } catch (e) { addToast(String(e), "error"); } }}>
+                        <RefreshCcw className="size-3.5" /> Reset
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {activeTab === "company" && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-            <h2 className="font-bold text-lg mb-3">Société</h2>
-            <div className="space-y-3">
-              <input type="text" value={company.name} onChange={(e) => setCompany(c => ({ ...c, name: e.target.value }))}
-                placeholder="Raison sociale"
-                className="w-full h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300" />
-              <input type="text" value={company.address} onChange={(e) => setCompany(c => ({ ...c, address: e.target.value }))}
-                placeholder="Adresse"
-                className="w-full h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300" />
-              <input type="text" value={company.phone} onChange={(e) => setCompany(c => ({ ...c, phone: e.target.value }))}
-                placeholder="Téléphone"
-                className="w-full h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300" />
-              <input type="text" value={company.tax_id} onChange={(e) => setCompany(c => ({ ...c, tax_id: e.target.value }))}
-                placeholder="Matricule fiscal"
-                className="w-full h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300" />
-              <button onClick={() => addToast("Société enregistrée", "success")}
-                className="touch-button w-full h-10 rounded-lg bg-blue-600 text-white font-medium">Enregistrer</button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "taxes" && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-            <h2 className="font-bold text-lg mb-3">Taux de TVA</h2>
-            <div className="space-y-2">
-              {DEFAULT_TAXES.map((t) => (
-                <div key={t.rate} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 dark:bg-slate-700">
-                  <span className="flex-1 font-medium">{t.name}</span>
-                  <span className="text-blue-600 font-bold">{t.rate}%</span>
+        <TabsContent value="company">
+          <Card className="max-w-xl">
+            <CardHeader>
+              <CardTitle>Informations société</CardTitle>
+              <CardDescription>Renseignez les informations de votre entreprise</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="cname">Raison sociale</Label>
+                <Input id="cname" value={company.name} onChange={(e) => setCompany(c => ({ ...c, name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="caddress">Adresse</Label>
+                <Input id="caddress" value={company.address} onChange={(e) => setCompany(c => ({ ...c, address: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cphone">Téléphone</Label>
+                  <Input id="cphone" value={company.phone} onChange={(e) => setCompany(c => ({ ...c, phone: e.target.value }))} />
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "series" && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-            <h2 className="font-bold text-lg mb-3">Séries de documents</h2>
-            <div className="space-y-2">
-              {DEFAULT_SERIES.map((s) => (
-                <div key={s.type} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 dark:bg-slate-700">
-                  <span className="flex-1 font-medium capitalize">{s.type}</span>
-                  <span className="text-blue-600 font-mono font-bold">{s.prefix}000001</span>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ctax">Matricule fiscal</Label>
+                  <Input id="ctax" value={company.tax_id} onChange={(e) => setCompany(c => ({ ...c, tax_id: e.target.value }))} />
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+              </div>
+              <Button onClick={() => addToast("Société enregistrée", "success")}>Enregistrer</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="taxes">
+          <Card className="max-w-xl">
+            <CardHeader>
+              <CardTitle>Taux de TVA</CardTitle>
+              <CardDescription>Taux de taxe sur la valeur ajoutée configurés</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {DEFAULT_TAXES.map((t) => (
+                  <div key={t.rate} className="flex items-center gap-3 p-3 rounded-lg border">
+                    <Percent className="size-4 text-muted-foreground" />
+                    <span className="flex-1 font-medium">{t.name}</span>
+                    <Badge variant="secondary" className="font-mono">{t.rate}%</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="series">
+          <Card className="max-w-xl">
+            <CardHeader>
+              <CardTitle>Séries de documents</CardTitle>
+              <CardDescription>Préfixes et compteurs de numérotation</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {DEFAULT_SERIES.map((s) => (
+                  <div key={s.type} className="flex items-center gap-3 p-3 rounded-lg border">
+                    <Hash className="size-4 text-muted-foreground" />
+                    <span className="flex-1 font-medium">{s.type}</span>
+                    <Badge variant="secondary" className="font-mono">{s.prefix}000001</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

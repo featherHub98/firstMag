@@ -1,18 +1,36 @@
-import { useState } from "react";
-import { searchArticles, getStockLevel, listStockMovements } from "../api";
+import * as React from "react";
+import { ColumnDef } from "@tanstack/react-table";
+import { Package, ArrowDown, ArrowUp, ArrowRightLeft, ClipboardList, Search } from "lucide-react";
+import { searchArticles, getStockLevel, listStockMovements, fmtDinars } from "../api";
 import { useToastStore } from "../api/toastStore";
 import type { Article, StockMovement } from "../types";
+import { DataTable } from "@/components/common/DataTable";
+import { EmptyState } from "@/components/common/EmptyState";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const typeLabels: Record<string, { label: string; icon: React.ReactNode; variant: "success" | "destructive" | "info" | "secondary" }> = {
+  entry: { label: "Entrée", icon: <ArrowDown className="size-3" />, variant: "success" },
+  exit: { label: "Sortie", icon: <ArrowUp className="size-3" />, variant: "destructive" },
+  transfer: { label: "Transfert", icon: <ArrowRightLeft className="size-3" />, variant: "info" },
+  inventory: { label: "Inventaire", icon: <ClipboardList className="size-3" />, variant: "secondary" },
+};
 
 export default function StockPage() {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [levels, setLevels] = useState<Record<string, number>>({});
-  const [q, setQ] = useState("");
-  const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [view, setView] = useState<"levels" | "movements">("levels");
+  const [articles, setArticles] = React.useState<Article[]>([]);
+  const [levels, setLevels] = React.useState<Record<string, number>>({});
+  const [q, setQ] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [movements, setMovements] = React.useState<StockMovement[]>([]);
+  const [view, setView] = React.useState<"levels" | "movements">("levels");
   const addToast = useToastStore((s) => s.addToast);
 
   async function loadArticles() {
     if (!q.trim()) { setArticles([]); return; }
+    setLoading(true);
     try {
       const data = await searchArticles(q.trim());
       setArticles(data);
@@ -22,83 +40,170 @@ export default function StockPage() {
       }
       setLevels(lvls);
     } catch (e) { addToast(String(e), "error"); }
+    finally { setLoading(false); }
   }
 
-  async function showMovements(articleId: string) {
-    try {
-      const data = await listStockMovements(articleId);
-      setMovements(data);
-      setView("movements");
-    } catch (e) { addToast(String(e), "error"); }
+  async function loadAllMovements() {
+    setLoading(true);
+    try { const data = await listStockMovements(); setMovements(data); }
+    catch (e) { addToast(String(e), "error"); }
+    finally { setLoading(false); }
   }
 
-  const typeLabels: Record<string, string> = {
-    entry: "Entrée", exit: "Sortie", transfer: "Transfert", inventory: "Inventaire",
-  };
+  React.useEffect(() => {
+    if (view === "movements" && movements.length === 0) loadAllMovements();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  const levelColumns: ColumnDef<Article>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.code}</span>,
+    },
+    {
+      accessorKey: "name",
+      header: "Article",
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.original.name}</span>
+          {row.original.barcode && <span className="text-xs text-muted-foreground font-mono">{row.original.barcode}</span>}
+        </div>
+      ),
+    },
+    {
+      id: "level",
+      header: "Niveau",
+      cell: ({ row }) => {
+        const qty = levels[row.original.id] ?? 0;
+        return (
+          <Badge variant={qty > 0 ? "success" : "destructive"} className="font-mono">
+            {qty}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "sale_price",
+      header: "Prix vente",
+      cell: ({ row }) => <span className="tabular-nums">{fmtDinars(row.original.sale_price)} D</span>,
+    },
+  ];
+
+  const movementColumns: ColumnDef<StockMovement>[] = [
+    {
+      accessorKey: "created_at",
+      header: "Date",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground font-mono">
+          {new Date(row.original.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "movement_type",
+      header: "Type",
+      cell: ({ row }) => {
+        const t = typeLabels[row.original.movement_type];
+        return (
+          <Badge variant={t?.variant || "secondary"} className="gap-1">
+            {t?.icon}
+            {t?.label || row.original.movement_type}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "article_id",
+      header: "Article",
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.article_id.slice(0, 8)}</span>,
+    },
+    {
+      accessorKey: "quantity",
+      header: "Quantité",
+      cell: ({ row }) => (
+        <span className={`font-bold tabular-nums ${row.original.movement_type === "entry" ? "text-emerald-600" : row.original.movement_type === "exit" ? "text-rose-600" : ""}`}>
+          {row.original.movement_type === "entry" ? "+" : row.original.movement_type === "exit" ? "−" : ""}
+          {row.original.quantity}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "reference",
+      header: "Référence",
+      cell: ({ row }) =>
+        row.original.reference ? (
+          <span className="font-mono text-xs">{row.original.reference}</span>
+        ) : (
+          <span className="text-muted-foreground/40">—</span>
+        ),
+    },
+  ];
 
   return (
-    <div className="p-6 h-full flex flex-col">
-      <h1 className="text-2xl font-bold mb-4">Gestion de stock</h1>
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-        <button onClick={() => setView("levels")}
-          className={`touch-button px-4 h-10 rounded-lg border font-medium text-sm whitespace-nowrap ${view === "levels" ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"}`}>Niveaux</button>
-        <button onClick={() => { setView("movements"); listStockMovements().then(setMovements).catch(() => {}); }}
-          className={`touch-button px-4 h-10 rounded-lg border font-medium text-sm whitespace-nowrap ${view === "movements" ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"}`}>Mouvements</button>
-      </div>
+    <div className="p-4 md:p-6 h-full flex flex-col">
+      <PageHeader
+        title="Stock"
+        description="Niveaux et mouvements de stock"
+      />
+
+      <Tabs value={view} onValueChange={(v) => setView(v as "levels" | "movements")} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="levels" className="gap-1.5">
+            <Package className="size-4" />
+            Niveaux
+          </TabsTrigger>
+          <TabsTrigger value="movements" className="gap-1.5">
+            <ArrowRightLeft className="size-4" />
+            Mouvements
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {view === "levels" && (
-        <div className="flex-1 overflow-y-auto">
+        <>
           <div className="flex gap-2 mb-4">
-            <input type="text" value={q} onChange={(e) => setQ(e.target.value)}
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") loadArticles(); }}
-              placeholder="Rechercher un article..."
-              className="flex-1 h-10 px-4 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600" />
-            <button onClick={loadArticles} className="touch-button px-4 h-10 rounded-lg bg-blue-600 text-white font-medium">OK</button>
+              placeholder="Rechercher un article (nom, code, code-barres)..."
+              className="max-w-md"
+            />
+            <Button onClick={loadArticles} disabled={loading}>
+              <Search className="size-4" />
+              Rechercher
+            </Button>
           </div>
-          {articles.length === 0 && <p className="text-slate-400 text-center mt-8">Recherchez un article</p>}
-          {articles.map((a) => (
-            <div key={a.id} className="flex items-center gap-3 p-3 mb-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div className="flex-1">
-                <p className="font-medium">{a.name}</p>
-                <p className="text-xs text-slate-500">{a.code}</p>
-              </div>
-              <span className="font-bold text-lg">{levels[a.id] ?? "?"}</span>
-              <button onClick={() => showMovements(a.id)}
-                className="touch-button px-3 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-xs font-medium">Mouvements</button>
-            </div>
-          ))}
-        </div>
+          {articles.length === 0 ? (
+            <EmptyState
+              icon={<Package className="size-6" />}
+              title={q ? "Aucun article trouvé" : "Recherchez un article"}
+              description={q ? "Aucun article ne correspond à votre recherche." : "Tapez un nom, code ou code-barres pour voir les niveaux de stock."}
+            />
+          ) : (
+            <DataTable
+              columns={levelColumns}
+              data={articles}
+              isLoading={loading}
+            />
+          )}
+        </>
       )}
 
       {view === "movements" && (
-        <div className="flex-1 overflow-y-auto">
-          <button onClick={() => setView("levels")}
-            className="touch-button text-blue-600 text-sm mb-3">&larr; Retour</button>
-          {movements.length === 0 && <p className="text-slate-400 text-center mt-8">Aucun mouvement</p>}
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-slate-500 border-b">
-              <th className="pb-2">Date</th><th className="pb-2">Type</th><th className="pb-2">Article</th>
-              <th className="pb-2 text-right">Qté</th><th className="pb-2">Réf.</th>
-            </tr></thead>
-            <tbody>
-              {movements.map((m) => (
-                <tr key={m.id} className="border-b border-slate-100 dark:border-slate-700">
-                  <td className="py-2 text-xs">{new Date(m.created_at).toLocaleDateString()}</td>
-                  <td className="py-2">
-                    <span className={`text-xs px-2 py-0.5 rounded ${
-                      m.movement_type === "entry" ? "bg-green-100 text-green-700" :
-                      m.movement_type === "exit" ? "bg-red-100 text-red-700" :
-                      "bg-blue-100 text-blue-700"
-                    }`}>{typeLabels[m.movement_type] || m.movement_type}</span>
-                  </td>
-                  <td className="py-2">{m.article_id.slice(0, 8)}</td>
-                  <td className="py-2 text-right font-bold">{m.quantity}</td>
-                  <td className="py-2 text-slate-500">{m.reference || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={movementColumns}
+          data={movements}
+          isLoading={loading}
+          emptyState={
+            <EmptyState
+              icon={<ArrowRightLeft className="size-6" />}
+              title="Aucun mouvement"
+              description="Il n'y a pas encore eu de mouvement de stock."
+            />
+          }
+        />
       )}
     </div>
   );

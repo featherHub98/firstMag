@@ -1,9 +1,46 @@
-import { useState, useEffect } from "react";
-import { listDocuments, getDocumentLines, transformDocument, confirmDocument, printInvoice } from "../api";
+import * as React from "react";
+import { ColumnDef } from "@tanstack/react-table";
+import { Printer, CheckCircle, ArrowRight, FileText, Truck, ClipboardList, RotateCcw, ScrollText } from "lucide-react";
+import { listDocuments, getDocumentLines, transformDocument, confirmDocument, printInvoice, fmtDinars } from "../api";
 import { useToastStore } from "../api/toastStore";
-import type { Document, DocumentLine } from "../types";
+import type { Document, DocumentLine, DocumentType } from "../types";
+import { DataTable } from "@/components/common/DataTable";
+import { EmptyState } from "@/components/common/EmptyState";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 
-const tabs = [
+const typeConfig: Record<DocumentType, { label: string; icon: React.ReactNode; variant: "info" | "secondary" | "success" | "warning" }> = {
+  quote: { label: "Devis", icon: <ScrollText className="size-3" />, variant: "info" },
+  order: { label: "Commande", icon: <ClipboardList className="size-3" />, variant: "info" },
+  delivery: { label: "Livraison", icon: <Truck className="size-3" />, variant: "secondary" },
+  invoice: { label: "Facture", icon: <FileText className="size-3" />, variant: "success" },
+  credit_note: { label: "Avoir", icon: <RotateCcw className="size-3" />, variant: "warning" },
+  purchase_order: { label: "Cmd. achat", icon: <ClipboardList className="size-3" />, variant: "info" },
+  purchase_delivery: { label: "BL achat", icon: <Truck className="size-3" />, variant: "secondary" },
+  purchase_invoice: { label: "Fact. achat", icon: <FileText className="size-3" />, variant: "success" },
+  purchase_return: { label: "Ret. achat", icon: <RotateCcw className="size-3" />, variant: "warning" },
+};
+
+const statusConfig: Record<string, { variant: "success" | "warning" | "info" | "destructive" | "secondary" }> = {
+  draft: { variant: "warning" },
+  confirmed: { variant: "success" },
+  transformed: { variant: "info" },
+  cancelled: { variant: "destructive" },
+  paid: { variant: "success" },
+  partial: { variant: "warning" },
+};
+
+const tabs: { key: DocumentType | ""; label: string }[] = [
   { key: "", label: "Tous" },
   { key: "quote", label: "Devis" },
   { key: "order", label: "Commandes" },
@@ -13,130 +50,220 @@ const tabs = [
 ];
 
 export default function SalesPage() {
-  const [docs, setDocs] = useState<Document[]>([]);
-  const [filter, setFilter] = useState("");
-  const [selected, setSelected] = useState<Document | null>(null);
-  const [lines, setLines] = useState<DocumentLine[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [docs, setDocs] = React.useState<Document[]>([]);
+  const [filter, setFilter] = React.useState<DocumentType | "">("");
+  const [selected, setSelected] = React.useState<Document | null>(null);
+  const [lines, setLines] = React.useState<DocumentLine[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const addToast = useToastStore((s) => s.addToast);
 
-  useEffect(() => { load(); }, [filter]);
+  React.useEffect(() => { load(); }, [filter]);
 
   async function load() {
     setLoading(true);
-    const data = await listDocuments(filter || undefined);
-    setDocs(data);
-    setLoading(false);
+    try { const data = await listDocuments(filter || undefined); setDocs(data); }
+    catch (e) { addToast(String(e), "error"); }
+    finally { setLoading(false); }
   }
 
   async function openDoc(d: Document) {
     setSelected(d);
-    const l = await getDocumentLines(d.id);
-    setLines(l);
+    try { const l = await getDocumentLines(d.id); setLines(l); }
+    catch { setLines([]); }
   }
 
-  async function handleTransform(id: string) {
+  async function handleTransform() {
+    if (!selected) return;
     try {
-      const newDoc = await transformDocument(id);
+      const newDoc = await transformDocument(selected.id);
       addToast(`Document transformé: ${newDoc.doc_number}`, "success");
       setSelected(null);
       load();
-    } catch (e) {
-      addToast(String(e), "error");
-    }
+    } catch (e) { addToast(String(e), "error"); }
   }
 
-  async function handleConfirm(id: string) {
+  async function handleConfirm() {
+    if (!selected) return;
     try {
-      await confirmDocument(id);
+      await confirmDocument(selected.id);
       addToast("Document confirmé", "success");
       setSelected(null);
       load();
-    } catch (e) {
-      addToast(String(e), "error");
-    }
+    } catch (e) { addToast(String(e), "error"); }
   }
 
-  const labelMap: Record<string, string> = {
-    quote: "Devis", order: "Commande", delivery: "Livraison",
-    invoice: "Facture", credit_note: "Avoir",
-  };
+  const columns: ColumnDef<Document>[] = [
+    {
+      accessorKey: "doc_number",
+      header: "N°",
+      cell: ({ row }) => <span className="font-mono font-medium">{row.original.doc_number}</span>,
+    },
+    {
+      accessorKey: "doc_type",
+      header: "Type",
+      cell: ({ row }) => {
+        const t = typeConfig[row.original.doc_type];
+        return (
+          <Badge variant={t.variant} className="gap-1">
+            {t.icon}
+            {t.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "partner_name",
+      header: "Tiers",
+      cell: ({ row }) => row.original.partner_name || <span className="text-muted-foreground/40">—</span>,
+    },
+    {
+      accessorKey: "status",
+      header: "Statut",
+      cell: ({ row }) => (
+        <Badge variant={statusConfig[row.original.status]?.variant || "secondary"}>
+          {row.original.status}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "total_ttc",
+      header: "Total TTC",
+      cell: ({ row }) => <span className="font-semibold tabular-nums">{fmtDinars(row.original.total_ttc)} D</span>,
+    },
+    {
+      accessorKey: "created_at",
+      header: "Date",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground font-mono">
+          {new Date(row.original.created_at).toLocaleDateString("fr-FR")}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div className="p-6 h-full flex flex-col">
-      <h1 className="text-2xl font-bold mb-4">Documents de vente</h1>
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-        {tabs.map((t) => (
-          <button key={t.key}
-            onClick={() => setFilter(t.key)}
-            className={`touch-button px-4 h-10 rounded-lg border font-medium text-sm whitespace-nowrap ${
-              filter === t.key
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-            }`}>{t.label}</button>
-        ))}
-      </div>
+    <div className="p-4 md:p-6 h-full flex flex-col">
+      <PageHeader
+        title="Documents de vente"
+        description="Devis, commandes, livraisons, factures et avoirs"
+      />
 
-      <div className="flex-1 flex gap-4 min-h-0">
-        <div className="flex-1 overflow-y-auto">
-          {loading && <p className="text-slate-400 text-center mt-8">Chargement...</p>}
-          {!loading && docs.length === 0 && <p className="text-slate-400 text-center mt-8">Aucun document</p>}
-          {docs.map((d) => (
-            <div key={d.id}
-              onClick={() => openDoc(d)}
-              className={`p-3 rounded-xl mb-2 cursor-pointer border ${
-                selected?.id === d.id
-                  ? "bg-blue-50 dark:bg-blue-900 border-blue-300"
-                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-              }`}>
-              <div className="flex items-center gap-3">
-                <span className="font-bold">{d.doc_number}</span>
-                <span className="text-sm px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700">{labelMap[d.doc_type] || d.doc_type}</span>
-                <span className={`text-xs px-2 py-0.5 rounded ${
-                  d.status === "confirmed" ? "bg-green-100 text-green-700" :
-                  d.status === "draft" ? "bg-yellow-100 text-yellow-700" :
-                  d.status === "transformed" ? "bg-blue-100 text-blue-700" :
-                  "bg-red-100 text-red-700"
-                }`}>{d.status}</span>
-                <span className="flex-1" />
-                <span className="font-bold text-blue-600">{(d.total_ttc / 1000).toFixed(3)} D</span>
-              </div>
-              <p className="text-sm text-slate-500 mt-1">{d.partner_name} &middot; {new Date(d.created_at).toLocaleDateString()}</p>
-            </div>
+      <Tabs value={filter} onValueChange={(v) => setFilter(v as DocumentType | "")} className="mb-4">
+        <TabsList>
+          {tabs.map((t) => (
+            <TabsTrigger key={t.key} value={t.key}>{t.label}</TabsTrigger>
           ))}
-        </div>
+        </TabsList>
+      </Tabs>
 
-        {selected && (
-          <div className="w-80 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex flex-col">
-            <h3 className="font-bold text-lg mb-2">{selected.doc_number}</h3>
-            <p className="text-sm text-slate-500 mb-3">{selected.partner_name}</p>
-            <div className="flex-1 overflow-y-auto space-y-2 mb-3">
-              {lines.map((l) => (
-                <div key={l.id} className="flex justify-between text-sm">
-                  <span className="truncate flex-1">{l.article_name} × {l.quantity}</span>
-                  <span className="font-medium ml-2">{(l.total_ttc / 1000).toFixed(3)}</span>
+      <DataTable
+        columns={columns}
+        data={docs}
+        isLoading={loading}
+        onRowClick={openDoc}
+        searchColumn="search"
+        searchPlaceholder="Rechercher par n° ou tiers..."
+        emptyState={
+          <EmptyState
+            icon={<FileText className="size-6" />}
+            title="Aucun document"
+            description="Les documents de vente apparaîtront ici."
+          />
+        }
+      />
+
+      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto p-0">
+          {selected && (
+            <div className="flex flex-col h-full">
+              <SheetHeader className="p-6 border-b">
+                <SheetTitle className="font-mono">{selected.doc_number}</SheetTitle>
+                <SheetDescription>{typeConfig[selected.doc_type]?.label || selected.doc_type}</SheetDescription>
+                <div className="flex items-center gap-2 pt-2">
+                  <Badge variant={statusConfig[selected.status]?.variant || "secondary"}>
+                    {selected.status}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(selected.created_at).toLocaleString("fr-FR")}
+                  </span>
                 </div>
-              ))}
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Tiers</p>
+                  <p className="font-medium">{selected.partner_name || "—"}</p>
+                </div>
+                {selected.notes && (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Notes</p>
+                    <p className="text-sm">{selected.notes}</p>
+                  </div>
+                )}
+
+                <Separator />
+
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Lignes</p>
+                  <div className="space-y-2">
+                    {lines.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Aucune ligne</p>
+                    ) : (
+                      lines.map((l) => (
+                        <div key={l.id} className="flex items-center gap-2 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate font-medium">{l.article_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtDinars(l.unit_price)} × {l.quantity}
+                            </p>
+                          </div>
+                          <span className="font-semibold tabular-nums">{fmtDinars(l.total_ttc)} D</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Total HT</span>
+                    <span className="tabular-nums">{fmtDinars(selected.total_ht)} D</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>TVA</span>
+                    <span className="tabular-nums">{fmtDinars(selected.total_ttc - selected.total_ht)} D</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold pt-1">
+                    <span>Total TTC</span>
+                    <span className="tabular-nums">{fmtDinars(selected.total_ttc)} D</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t p-4 flex flex-wrap gap-2">
+                {selected.status === "draft" && (
+                  <Button onClick={handleConfirm} className="flex-1">
+                    <CheckCircle className="size-4" />
+                    Confirmer
+                  </Button>
+                )}
+                {selected.status !== "transformed" && selected.status !== "cancelled" && (
+                  <Button onClick={handleTransform} variant="outline" className="flex-1">
+                    <ArrowRight className="size-4" />
+                    Transformer
+                  </Button>
+                )}
+                <Button onClick={() => printInvoice(selected.id)} variant="outline" className="flex-1">
+                  <Printer className="size-4" />
+                  Imprimer
+                </Button>
+              </div>
             </div>
-            <div className="border-t pt-2 space-y-1 text-sm">
-              <div className="flex justify-between"><span>Total HT</span><span>{(selected.total_ht / 1000).toFixed(3)} D</span></div>
-              <div className="flex justify-between font-bold text-lg"><span>Total TTC</span><span>{(selected.total_ttc / 1000).toFixed(3)} D</span></div>
-            </div>
-            <div className="flex gap-2 mt-3">
-              {selected.status !== "transformed" && selected.status !== "cancelled" && (
-                <button onClick={() => handleTransform(selected.id)}
-                  className="touch-button flex-1 h-10 rounded-xl bg-blue-600 text-white text-sm font-medium">Transformer</button>
-              )}
-              {selected.status === "draft" && (
-                <button onClick={() => handleConfirm(selected.id)}
-                  className="touch-button flex-1 h-10 rounded-xl bg-green-600 text-white text-sm font-medium">Confirmer</button>
-              )}
-              <button onClick={() => printInvoice(selected.id)}
-                className="touch-button flex-1 h-10 rounded-xl bg-slate-200 dark:bg-slate-600 text-sm font-medium">Imprimer</button>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

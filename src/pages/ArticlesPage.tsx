@@ -1,26 +1,47 @@
-import { useState, useEffect } from "react";
-import { listArticles, searchArticles, createArticle, updateArticle, deleteArticle, fmtDinars } from "../api";
+import * as React from "react";
+import { ColumnDef } from "@tanstack/react-table";
+import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { listArticles, createArticle, updateArticle, deleteArticle, fmtDinars } from "../api";
 import { useToastStore } from "../api/toastStore";
 import type { Article, CreateArticle } from "../types";
+import { DataTable } from "@/components/common/DataTable";
+import { EmptyState } from "@/components/common/EmptyState";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 export default function ArticlesPage() {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [q, setQ] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<CreateArticle>({
+  const [articles, setArticles] = React.useState<Article[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [showForm, setShowForm] = React.useState(false);
+  const [editId, setEditId] = React.useState<string | null>(null);
+  const [deleteId, setDeleteId] = React.useState<Article | null>(null);
+  const [form, setForm] = React.useState<CreateArticle>({
     code: "", barcode: "", name: "", unit: "pcs",
     purchase_price: 0, sale_price: 0,
   });
   const addToast = useToastStore((s) => s.addToast);
 
-  useEffect(() => { load(); }, []);
+  React.useEffect(() => { load(); }, []);
 
   async function load() {
+    setLoading(true);
     try {
-      const data = q ? await searchArticles(q) : await listArticles();
+      const data = await listArticles();
       setArticles(data);
     } catch (e) { addToast(String(e), "error"); }
+    finally { setLoading(false); }
   }
 
   function openNew() {
@@ -40,6 +61,10 @@ export default function ArticlesPage() {
   }
 
   async function save() {
+    if (!form.code || !form.name) {
+      addToast("Code et nom requis", "error");
+      return;
+    }
     try {
       if (editId) {
         await updateArticle({ id: editId, ...form });
@@ -53,85 +78,156 @@ export default function ArticlesPage() {
     } catch (e) { addToast(String(e), "error"); }
   }
 
-  async function del(id: string, name: string) {
-    if (!confirm(`Supprimer "${name}" ?`)) return;
+  async function del() {
+    if (!deleteId) return;
     try {
-      await deleteArticle(id);
+      await deleteArticle(deleteId.id);
       addToast("Article supprimé", "success");
+      setDeleteId(null);
       load();
     } catch (e) { addToast(String(e), "error"); }
   }
 
+  const columns: ColumnDef<Article>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.code}</span>,
+    },
+    {
+      accessorKey: "name",
+      header: "Nom",
+      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+    },
+    {
+      accessorKey: "barcode",
+      header: "Code-barres",
+      cell: ({ row }) =>
+        row.original.barcode ? (
+          <span className="font-mono text-xs text-muted-foreground">{row.original.barcode}</span>
+        ) : (
+          <span className="text-muted-foreground/40">—</span>
+        ),
+    },
+    {
+      accessorKey: "purchase_price",
+      header: "Prix achat",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground tabular-nums">{fmtDinars(row.original.purchase_price)} D</span>
+      ),
+    },
+    {
+      accessorKey: "sale_price",
+      header: "Prix vente",
+      cell: ({ row }) => (
+        <span className="font-semibold tabular-nums">{fmtDinars(row.original.sale_price)} D</span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(row.original); }}>
+            <Pencil className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteId(row.original); }}>
+            <Trash2 className="size-4 text-destructive" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="p-6 h-full flex flex-col">
-      <h1 className="text-2xl font-bold mb-4">Catalogue articles</h1>
-      <div className="flex gap-2 mb-4">
-        <input type="text" value={q} onChange={(e) => { setQ(e.target.value); }}
-          onKeyDown={(e) => { if (e.key === "Enter") load(); }}
-          placeholder="Rechercher un article..."
-          className="flex-1 h-10 px-4 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600" />
-        <button onClick={load} className="touch-button px-4 h-10 rounded-lg bg-slate-200 dark:bg-slate-700 font-medium">OK</button>
-        <button onClick={openNew} className="touch-button px-4 h-10 rounded-lg bg-blue-600 text-white font-medium">+ Nouveau</button>
-      </div>
+    <div className="p-4 md:p-6 h-full flex flex-col">
+      <PageHeader
+        title="Articles"
+        description="Catalogue des produits et marchandises"
+        actions={
+          <Button onClick={openNew}>
+            <Plus className="size-4" />
+            Nouvel article
+          </Button>
+        }
+      />
 
-      <div className="flex-1 overflow-y-auto">
-        {articles.length === 0 && <p className="text-slate-400 text-center mt-8">Aucun article</p>}
-        <table className="w-full text-sm">
-          <thead><tr className="text-left text-slate-500 border-b">
-            <th className="pb-2">Code</th><th className="pb-2">Nom</th><th className="pb-2">Code-barres</th>
-            <th className="pb-2 text-right">Prix achat</th><th className="pb-2 text-right">Prix vente</th><th className="pb-2"></th>
-          </tr></thead>
-          <tbody>
-            {articles.map((a) => (
-              <tr key={a.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
-                <td className="py-2">{a.code}</td>
-                <td className="py-2 font-medium">{a.name}</td>
-                <td className="py-2 text-slate-500">{a.barcode || "—"}</td>
-                <td className="py-2 text-right">{fmtDinars(a.purchase_price)}</td>
-                <td className="py-2 text-right font-bold">{fmtDinars(a.sale_price)}</td>
-                <td className="py-2 text-right">
-                  <button onClick={() => openEdit(a)} className="text-blue-600 hover:underline text-xs mr-2">Modifier</button>
-                  <button onClick={() => del(a.id, a.name)} className="text-red-600 hover:underline text-xs">Suppr.</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-10 max-w-sm" />
+          <Skeleton className="h-96" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={articles}
+          searchColumn="search"
+          searchPlaceholder="Rechercher par nom, code ou code-barres..."
+          emptyState={
+            <EmptyState
+              icon={<Package className="size-6" />}
+              title="Aucun article"
+              description="Commencez par créer votre premier article."
+              action={<Button onClick={openNew}><Plus className="size-4" /> Nouvel article</Button>}
+            />
+          }
+        />
+      )}
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowForm(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">{editId ? "Modifier" : "Nouvel"} article</h3>
-            <div className="space-y-3">
-              {[
-                ["Code", "code"], ["Code-barres", "barcode"], ["Nom", "name"],
-              ].map(([label, key]) => (
-                <input key={key} type="text" placeholder={label}
-                  value={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  className="w-full h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600" />
-              ))}
-              <div className="flex gap-2">
-                <input type="number" placeholder="Prix achat (millimes)"
-                  value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: parseInt(e.target.value) || 0 })}
-                  className="flex-1 h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600" />
-                <input type="number" placeholder="Prix vente (millimes)"
-                  value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: parseInt(e.target.value) || 0 })}
-                  className="flex-1 h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600" />
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editId ? "Modifier l'article" : "Nouvel article"}</DialogTitle>
+            <DialogDescription>
+              Renseignez les informations du produit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="code">Code</Label>
+                <Input id="code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="ART001" />
               </div>
-              <input type="text" placeholder="Unité"
-                value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                className="w-full h-10 rounded-lg px-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600" />
+              <div className="space-y-1.5">
+                <Label htmlFor="barcode">Code-barres</Label>
+                <Input id="barcode" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="613012345678" />
+              </div>
             </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => setShowForm(false)}
-                className="touch-button flex-1 h-10 rounded-xl bg-slate-200 dark:bg-slate-600 font-medium">Annuler</button>
-              <button onClick={save}
-                className="touch-button flex-1 h-10 rounded-xl bg-blue-600 text-white font-medium">Enregistrer</button>
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Nom</Label>
+              <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nom du produit" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="purchase">Prix achat (D)</Label>
+                <Input id="purchase" type="number" step="0.001" value={form.purchase_price / 1000} onChange={(e) => setForm({ ...form, purchase_price: Math.round((parseFloat(e.target.value) || 0) * 1000) })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sale">Prix vente (D)</Label>
+                <Input id="sale" type="number" step="0.001" value={form.sale_price / 1000} onChange={(e) => setForm({ ...form, sale_price: Math.round((parseFloat(e.target.value) || 0) * 1000) })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="unit">Unité</Label>
+              <Input id="unit" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="pcs" />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
+            <Button onClick={save}>Enregistrer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(o) => !o && setDeleteId(null)}
+        title="Supprimer cet article ?"
+        description={deleteId ? `L'article « ${deleteId.name} » sera définitivement supprimé.` : ""}
+        confirmLabel="Supprimer"
+        onConfirm={del}
+        destructive
+      />
     </div>
   );
 }

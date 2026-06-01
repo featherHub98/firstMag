@@ -1,29 +1,16 @@
 import { create } from "zustand";
+import { toast as sonnerToast } from "sonner";
 
 export type ToastType = "success" | "error" | "info";
 
-interface Toast {
-  id: number;
-  message: string;
-  type: ToastType;
-}
-
 interface ToastState {
-  toasts: Toast[];
   addToast: (message: string, type?: ToastType) => void;
-  removeToast: (id: number) => void;
 }
 
-let nextId = 0;
-
-export const useToastStore = create<ToastState>((set) => ({
-  toasts: [],
+export const useToastStore = create<ToastState>(() => ({
   addToast: (message, type = "info") => {
-    const id = nextId++;
-    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
-    setTimeout(() => {
-      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-    }, 4000);
+    if (type === "error") sonnerToast.error(message);
+    else if (type === "success") sonnerToast.success(message);
+    else sonnerToast(message);
   },
-  removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

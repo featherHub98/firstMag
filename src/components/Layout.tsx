@@ -1,83 +1,203 @@
+import * as React from "react";
 import { Outlet, NavLink } from "react-router-dom";
+import {
+  CreditCard,
+  FileText,
+  Package,
+  Tag,
+  Users,
+  BarChart3,
+  Settings as SettingsIcon,
+  Moon,
+  Sun,
+  User as UserIcon,
+  LogOut,
+  Receipt,
+} from "lucide-react";
 import { useUiStore } from "../stores/uiStore";
 import { useSessionStore } from "../stores/sessionStore";
+import { useToastStore } from "../api/toastStore";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import StatusBar from "./StatusBar";
 import LoginModal from "./LoginModal";
 
 const navItems = [
-  { to: "/pos", label: "Caisse", icon: "💳" },
-  { to: "/sales", label: "Ventes", icon: "📄" },
-  { to: "/stock", label: "Stock", icon: "📦" },
-  { to: "/articles", label: "Articles", icon: "🏷️" },
-  { to: "/partners", label: "Tiers", icon: "👥" },
-  { to: "/reports", label: "États", icon: "📊" },
-  { to: "/settings", label: "Config", icon: "⚙️" },
+  { to: "/pos", label: "Caisse", icon: CreditCard },
+  { to: "/sales", label: "Ventes", icon: FileText },
+  { to: "/stock", label: "Stock", icon: Package },
+  { to: "/articles", label: "Articles", icon: Tag },
+  { to: "/partners", label: "Tiers", icon: Users },
+  { to: "/reports", label: "États", icon: BarChart3 },
+  { to: "/settings", label: "Config", icon: SettingsIcon },
 ];
+
+function AppSidebar() {
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-1 py-1.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm shrink-0">
+            FM
+          </div>
+          {!isCollapsed && (
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="font-semibold text-sm truncate">FIRST MAG</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">POS</span>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarMenu>
+          {navItems.map((item) => (
+            <SidebarMenuItem key={item.to}>
+              <SidebarMenuButton asChild tooltip={item.label}>
+                <NavLink to={item.to} end>
+                  {({ isActive }) => (
+                    <>
+                      <item.icon />
+                      <span>{item.label}</span>
+                      {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />}
+                    </>
+                  )}
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarContent>
+      <SidebarFooter>
+        <UserMenu />
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
+function UserMenu() {
+  const darkMode = useUiStore((s) => s.darkMode);
+  const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
+  const setLoginOpen = useUiStore((s) => s.setLoginOpen);
+  const setUser = useSessionStore((s) => s.setUser);
+  const userName = useSessionStore((s) => s.currentUserName);
+  const addToast = useToastStore((s) => s.addToast);
+  const initials = (userName || "?").slice(0, 2).toUpperCase();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="w-full justify-start gap-2 h-9 px-2">
+          <Avatar className="h-7 w-7">
+            <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="flex flex-col items-start text-left min-w-0 group-data-[collapsible=icon]:hidden">
+            <span className="text-sm font-medium truncate w-full">{userName}</span>
+            <span className="text-[10px] text-muted-foreground">Caissier</span>
+          </div>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="right" className="w-56">
+        <DropdownMenuLabel>Mon compte</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setLoginOpen(true)}>
+          <UserIcon className="size-4" />
+          Changer d'utilisateur
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={toggleDarkMode}>
+          {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          {darkMode ? "Mode clair" : "Mode sombre"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
+            setUser("", "Invité");
+            setLoginOpen(true);
+            addToast("Déconnecté", "info");
+          }}
+          className="text-destructive focus:text-destructive"
+        >
+          <LogOut className="size-4" />
+          Déconnexion
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function HeaderBar() {
+  const registerOpen = useSessionStore((s) => s.registerOpen);
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="h-5" />
+      <div className="flex items-center gap-2">
+        <Receipt className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Caisse</span>
+        {registerOpen ? (
+          <Badge variant="success" className="h-5">Ouverte</Badge>
+        ) : (
+          <Badge variant="destructive" className="h-5">Fermée</Badge>
+        )}
+      </div>
+      <div className="flex-1" />
+      <DateDisplay />
+    </header>
+  );
+}
+
+function DateDisplay() {
+  const [now, setNow] = React.useState(new Date());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="text-xs text-muted-foreground font-mono hidden sm:block">
+      {now.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+    </div>
+  );
+}
 
 export default function Layout() {
   const darkMode = useUiStore((s) => s.darkMode);
-  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
-  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
-  const setLoginOpen = useUiStore((s) => s.setLoginOpen);
-  const userName = useSessionStore((s) => s.currentUserName);
-
   return (
-    <div className={`h-full flex ${darkMode ? "dark" : ""}`}>
-      <LoginModal />
-
-      {sidebarOpen && (
-        <nav className="w-20 lg:w-56 bg-slate-900 text-white flex flex-col shrink-0 overflow-y-auto">
-          <div className="p-4 text-center lg:text-left font-bold text-lg border-b border-slate-700">
-            <span className="hidden lg:inline">FIRST MAG</span>
-            <span className="lg:hidden">FM</span>
-          </div>
-          <div className="flex-1 py-2">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => { if (window.innerWidth < 1024) toggleSidebar(); }}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-3 mx-2 rounded-lg text-sm transition-colors touch-button ${
-                    isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800"
-                  }`
-                }
-              >
-                <span className="text-xl">{item.icon}</span>
-                <span className="hidden lg:inline">{item.label}</span>
-              </NavLink>
-            ))}
-          </div>
-          <div className="p-3 border-t border-slate-700 space-y-1">
-            <button onClick={() => setLoginOpen(true)}
-              className="w-full text-xs text-slate-400 hover:text-white touch-button">
-              👤 {userName}
-            </button>
-            <button onClick={toggleDarkMode}
-              className="w-full text-xs text-slate-400 hover:text-white touch-button">
-              {darkMode ? "☀️ Clair" : "🌙 Sombre"}
-            </button>
-          </div>
-        </nav>
-      )}
-
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-12 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 gap-3 shrink-0">
-          <button onClick={toggleSidebar} className="text-xl touch-button p-1">☰</button>
-          <div className="flex-1" />
-          <button onClick={() => setLoginOpen(true)}
-            className="text-sm text-slate-500 dark:text-slate-400 touch-button">{userName}</button>
-        </header>
-
-        <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900">
-          <Outlet />
-        </main>
-
-        <StatusBar />
+    <SidebarProvider>
+      <div className={cn("h-full flex w-full", darkMode && "dark")}>
+        <LoginModal />
+        <AppSidebar />
+        <div className="flex flex-col flex-1 min-w-0">
+          <HeaderBar />
+          <main className="flex-1 overflow-auto bg-muted/30 animate-fade-in">
+            <Outlet />
+          </main>
+          <StatusBar />
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

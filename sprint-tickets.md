@@ -92,4 +92,4 @@
 | 8.1 | App icon & branding | ✅ |
 | 8.2 | Windows installer config | ✅ |
 | 8.3 | README & quick-start | ✅ |
-| 8.4 | Tag v0.1.0 release | ☐ |
+| 8.4 | Tag v0.1.0 release | ✅ |
