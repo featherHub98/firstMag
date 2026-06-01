@@ -13,10 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const USERS: Record<string, { name: string; role: string }> = {
-  "1": { name: "Admin", role: "Admin" },
-  "2": { name: "Caissier", role: "Caissier" },
-};
+const USERS = [
+  { code: "1", name: "Admin", pin: "1234", role: "Admin" },
+  { code: "2", name: "Caissier", pin: "0000", role: "Caissier" },
+];
 
 export default function LoginModal() {
   const loginOpen = useUiStore((s) => s.loginOpen);
@@ -38,14 +38,14 @@ export default function LoginModal() {
   }
 
   function handleLogin() {
-    const user = USERS[code];
+    const user = USERS.find((u) => u.pin === code);
     if (user) {
-      setUser(code, user.name);
+      setUser(user.code, user.name);
       setLoginOpen(false);
       setCode("");
       addToast(`Connecté: ${user.name}`, "success");
     } else {
-      addToast("Code incorrect", "error");
+      addToast("Code PIN incorrect", "error");
       setCode("");
     }
   }
