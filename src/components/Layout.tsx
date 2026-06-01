@@ -187,16 +187,23 @@ export default function Layout() {
   const darkMode = useUiStore((s) => s.darkMode);
   return (
     <SidebarProvider>
-      <div className={cn("h-full flex w-full", darkMode && "dark")}>
-        <LoginModal />
-        <AppSidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <HeaderBar />
-          <main className="flex-1 overflow-auto bg-muted/30 animate-fade-in">
-            <Outlet />
-          </main>
-          <StatusBar />
-        </div>
+      <LoginModal />
+      <AppSidebar />
+      <div
+        className={cn(
+          "flex flex-col flex-1 min-w-0 h-full",
+          "peer-data-[state=expanded]:md:pl-[--sidebar-width]",
+          "peer-data-[state=collapsed]:md:pl-[--sidebar-width-icon]",
+          "peer-data-[collapsible=offcanvas]:md:pl-0",
+          "transition-[padding-left] duration-200 ease-linear",
+          darkMode && "dark",
+        )}
+      >
+        <HeaderBar />
+        <main className="flex-1 overflow-auto bg-muted/30 animate-fade-in">
+          <Outlet />
+        </main>
+        <StatusBar />
       </div>
     </SidebarProvider>
   );
