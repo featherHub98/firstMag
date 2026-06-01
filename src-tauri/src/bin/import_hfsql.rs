@@ -63,6 +63,16 @@ fn parse_i64(s: &str) -> i64 {
     s.trim().replace(',', ".").replace(' ', "").parse().unwrap_or(0)
 }
 
+fn parse_price_millimes(s: &str) -> i64 {
+    let cleaned = s.trim().replace(',', ".").replace(' ', "");
+    let dinars: f64 = cleaned.parse().unwrap_or(0.0);
+    if !dinars.is_finite() || dinars < 0.0 {
+        0
+    } else {
+        (dinars * 1000.0).round() as i64
+    }
+}
+
 async fn import_articles(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String> {
     let path = dir.join("ARTICLE.csv");
     if !path.exists() { return Ok(0); }
@@ -75,8 +85,8 @@ async fn import_articles(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String
         let code = get(rec, 0);
         let name = get(rec, 1);
         let barcode = get(rec, 2);
-        let purchase_price = (parse_i64(get(rec, 3)) * 1000) as i64;
-        let sale_price = (parse_i64(get(rec, 4)) * 1000) as i64;
+        let purchase_price = parse_price_millimes(get(rec, 3));
+        let sale_price = parse_price_millimes(get(rec, 4));
         let unit = get(rec, 5);
         let id = Uuid::new_v4().to_string();
 
@@ -161,9 +171,9 @@ async fn import_documents(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, Strin
         let num = get(rec, 0);
         if num.is_empty() { continue; }
         let partner_code = get(rec, 1);
-        let total_ht = parse_i64(get(rec, 2)) * 1000;
-        let total_tax = parse_i64(get(rec, 3)) * 1000;
-        let total_ttc = parse_i64(get(rec, 4)) * 1000;
+        let total_ht = parse_price_millimes(get(rec, 2));
+        let total_tax = parse_price_millimes(get(rec, 3));
+        let total_ttc = parse_price_millimes(get(rec, 4));
         let date_str = get(rec, 5);
         let doc_id = Uuid::new_v4().to_string();
         let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
@@ -187,7 +197,7 @@ async fn import_documents(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, Strin
         let num = get(rec, 0);
         let article_code = get(rec, 1);
         let qty = parse_i64(get(rec, 2)).max(0);
-        let price = parse_i64(get(rec, 3)) * 1000;
+        let price = parse_price_millimes(get(rec, 3));
         let doc_id = match doc_map.get(num) {
             Some(id) => id.clone(),
             None => continue,

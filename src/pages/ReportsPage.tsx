@@ -45,7 +45,7 @@ export default function ReportsPage() {
   ].filter((p) => p.value > 0) : [];
 
   return (
-    <div className="p-4 md:p-6 h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto">
       <PageHeader
         title="États et impressions"
         description="Rapports X (intermédiaire) et Z (clôture)"

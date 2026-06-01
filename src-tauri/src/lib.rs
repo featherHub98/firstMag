@@ -27,6 +27,16 @@ pub fn run() {
             let db_path = app_dir.join("firstmag.db");
             let db_path_str = db_path.to_string_lossy().to_string();
 
+            if !db_path.exists() {
+                let res_dir = app.path().resource_dir().ok();
+                if let Some(rd) = res_dir {
+                    let bundled = rd.join("db/firstmag.db");
+                    if bundled.exists() {
+                        std::fs::copy(&bundled, &db_path).ok();
+                    }
+                }
+            }
+
             let rt = tokio::runtime::Runtime::new().expect("failed to create runtime");
             let pool = rt.block_on(async {
                 persistence::init_db(&db_path_str)

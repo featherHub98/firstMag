@@ -61,17 +61,15 @@ function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1 py-1.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm shrink-0">
-            FM
-          </div>
-          {!isCollapsed && (
-            <div className="flex flex-col leading-tight min-w-0">
-              <span className="font-semibold text-sm truncate">FIRST MAG</span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">POS</span>
-            </div>
-          )}
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm shrink-0">
+          FM
         </div>
+        {!isCollapsed && (
+          <div className="flex flex-col leading-tight min-w-0">
+            <span className="font-semibold text-sm truncate">FIRST MAG</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">POS</span>
+          </div>
+        )}
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
@@ -111,11 +109,11 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="w-full justify-start gap-2 h-9 px-2">
-          <Avatar className="h-7 w-7">
+        <Button variant="ghost" className="w-full justify-start gap-2 h-10 px-2">
+          <Avatar className="h-8 w-8">
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
-          <div className="flex flex-col items-start text-left min-w-0 group-data-[collapsible=icon]:hidden">
+          <div className="flex flex-col items-start text-left min-w-0 group-data-[collapsible=icon]/sidebar-wrapper:hidden">
             <span className="text-sm font-medium truncate w-full">{userName}</span>
             <span className="text-[10px] text-muted-foreground">Caissier</span>
           </div>
@@ -152,7 +150,7 @@ function UserMenu() {
 function HeaderBar() {
   const registerOpen = useSessionStore((s) => s.registerOpen);
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-6">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-5" />
       <div className="flex items-center gap-2">
@@ -186,25 +184,18 @@ function DateDisplay() {
 export default function Layout() {
   const darkMode = useUiStore((s) => s.darkMode);
   return (
-    <SidebarProvider>
-      <LoginModal />
-      <AppSidebar />
-      <div
-        className={cn(
-          "flex flex-col flex-1 min-w-0 h-full",
-          "peer-data-[state=expanded]:md:pl-[--sidebar-width]",
-          "peer-data-[state=collapsed]:md:pl-[--sidebar-width-icon]",
-          "peer-data-[collapsible=offcanvas]:md:pl-0",
-          "transition-[padding-left] duration-200 ease-linear",
-          darkMode && "dark",
-        )}
-      >
-        <HeaderBar />
-        <main className="flex-1 overflow-auto bg-muted/30 animate-fade-in">
-          <Outlet />
-        </main>
-        <StatusBar />
-      </div>
-    </SidebarProvider>
+    <div className={cn("flex h-full w-full overflow-hidden", darkMode && "dark")}>
+      <SidebarProvider>
+        <LoginModal />
+        <AppSidebar />
+        <div className="flex flex-col flex-1 min-w-0 h-full">
+          <HeaderBar />
+          <main className="flex-1 overflow-auto bg-muted/30 animate-fade-in p-4 md:p-6">
+            <Outlet />
+          </main>
+          <StatusBar />
+        </div>
+      </SidebarProvider>
+    </div>
   );
 }

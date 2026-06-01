@@ -102,7 +102,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto">
       <PageHeader
         title="Configuration"
         description="Gérez la caisse, la caisse fiscale, votre société et les séries de numérotation"

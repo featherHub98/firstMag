@@ -141,7 +141,7 @@ export default function StockPage() {
   ];
 
   return (
-    <div className="p-4 md:p-6 h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <PageHeader
         title="Stock"
         description="Niveaux et mouvements de stock"

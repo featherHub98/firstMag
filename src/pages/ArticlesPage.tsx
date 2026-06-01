@@ -140,7 +140,7 @@ export default function ArticlesPage() {
   ];
 
   return (
-    <div className="p-4 md:p-6 h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <PageHeader
         title="Articles"
         description="Catalogue des produits et marchandises"

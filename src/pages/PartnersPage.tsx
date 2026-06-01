@@ -117,7 +117,7 @@ export default function PartnersPage() {
   ];
 
   return (
-    <div className="p-4 md:p-6 h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <PageHeader
         title="Tiers"
         description="Clients et fournisseurs"

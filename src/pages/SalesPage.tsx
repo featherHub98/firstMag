@@ -142,7 +142,7 @@ export default function SalesPage() {
   ];
 
   return (
-    <div className="p-4 md:p-6 h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <PageHeader
         title="Documents de vente"
         description="Devis, commandes, livraisons, factures et avoirs"
