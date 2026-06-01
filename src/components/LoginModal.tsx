@@ -11,13 +11,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const USERS = [
-  { code: "1", name: "Admin", pin: "1234", role: "Admin" },
-  { code: "2", name: "Caissier", pin: "0000", role: "Caissier" },
-];
+const USERS: Record<string, { name: string; role: string }> = {
+  "1": { name: "Admin", role: "Admin" },
+  "2": { name: "Caissier", role: "Caissier" },
+};
 
 export default function LoginModal() {
   const loginOpen = useUiStore((s) => s.loginOpen);
@@ -25,29 +24,29 @@ export default function LoginModal() {
   const setUser = useSessionStore((s) => s.setUser);
   const currentUser = useSessionStore((s) => s.currentUserName);
   const addToast = useToastStore((s) => s.addToast);
-  const [pin, setPin] = React.useState("");
+  const [code, setCode] = React.useState("");
 
   React.useEffect(() => {
-    if (currentUser === "Invité") setPin("");
+    if (currentUser === "Invité") setCode("");
   }, [currentUser, loginOpen]);
 
   function press(k: string) {
-    if (pin.length >= 4) return;
-    if (k === "back") setPin((p) => p.slice(0, -1));
-    else if (k === "clear") setPin("");
-    else setPin((p) => p + k);
+    if (code.length >= 4) return;
+    if (k === "back") setCode((p) => p.slice(0, -1));
+    else if (k === "clear") setCode("");
+    else setCode((p) => p + k);
   }
 
-  function handleLogin(code: string) {
-    const user = USERS.find((u) => u.code === code);
-    if (user && user.pin === pin) {
-      setUser(user.code, user.name);
+  function handleLogin() {
+    const user = USERS[code];
+    if (user) {
+      setUser(code, user.name);
       setLoginOpen(false);
-      setPin("");
+      setCode("");
       addToast(`Connecté: ${user.name}`, "success");
     } else {
-      addToast("Code PIN incorrect", "error");
-      setPin("");
+      addToast("Code incorrect", "error");
+      setCode("");
     }
   }
 
@@ -70,7 +69,7 @@ export default function LoginModal() {
               </div>
               <div>
                 <DialogTitle className="text-2xl">FIRST MAG</DialogTitle>
-                <DialogDescription>Connectez-vous pour commencer</DialogDescription>
+                <DialogDescription>Entrez votre code pour commencer</DialogDescription>
               </div>
             </DialogHeader>
 
@@ -79,7 +78,7 @@ export default function LoginModal() {
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div
                     key={i}
-                    className={`size-3 rounded-full transition-all ${i < pin.length ? "bg-primary scale-110" : "bg-muted"}`}
+                    className={`size-3 rounded-full transition-all ${i < code.length ? "bg-primary scale-110" : "bg-muted"}`}
                   />
                 ))}
               </div>
@@ -95,7 +94,7 @@ export default function LoginModal() {
                     {k}
                   </Button>
                 ))}
-                <Button variant="ghost" className="h-14" onClick={() => setPin("")}>
+                <Button variant="ghost" className="h-14" onClick={() => setCode("")}>
                   C
                 </Button>
                 <Button variant="outline" className="h-14 text-xl font-semibold" onClick={() => press("0")}>
@@ -106,25 +105,15 @@ export default function LoginModal() {
                 </Button>
               </div>
 
-              <div className="space-y-2 pt-2 border-t">
-                {USERS.map((u) => (
-                  <Button
-                    key={u.code}
-                    variant="secondary"
-                    onClick={() => handleLogin(u.code)}
-                    disabled={pin.length < 1}
-                    className="w-full justify-between"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Avatar className="size-6">
-                        <AvatarFallback className="text-[10px]">{u.name.slice(0, 2)}</AvatarFallback>
-                      </Avatar>
-                      {u.name}
-                    </span>
-                    <Badge variant="outline">{u.role}</Badge>
-                  </Button>
-                ))}
-              </div>
+              <Button
+                variant="default"
+                size="lg"
+                className="w-full h-14 text-lg font-semibold"
+                disabled={code.length < 1}
+                onClick={handleLogin}
+              >
+                Entrer
+              </Button>
             </div>
           </div>
         ) : (
