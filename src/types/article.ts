@@ -8,7 +8,7 @@ export interface Article {
   purchase_price: number;
   sale_price: number;
   tax_rate_id: string | null;
-  unit: string;
+  unit_of_measure_id: string | null;
   image_path: string | null;
   active: boolean;
   created_at: string;
@@ -36,7 +36,7 @@ export interface CreateArticle {
   purchase_price: number;
   sale_price: number;
   tax_rate_id?: string | null;
-  unit: string;
+  unit_of_measure_id?: string | null;
 }
 
 export interface UpdateArticle {
@@ -49,6 +49,6 @@ export interface UpdateArticle {
   purchase_price?: number;
   sale_price?: number;
   tax_rate_id?: string | null;
-  unit?: string;
+  unit_of_measure_id?: string | null;
   active?: boolean;
 }

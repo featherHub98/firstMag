@@ -12,6 +12,7 @@ export interface Partner {
   credit_limit: number;
   balance: number;
   notes: string;
+  salesperson_id: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -27,4 +28,5 @@ export interface CreatePartner {
   tax_id: string;
   credit_limit: number;
   notes: string;
+  salesperson_id?: string | null;
 }

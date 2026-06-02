@@ -32,3 +32,7 @@ export async function printInvoice(docId: string): Promise<void> {
 export async function printReceipt(docId: string): Promise<void> {
   return invoke("print_receipt", { docId });
 }
+
+export async function printCheque(docId: string): Promise<void> {
+  return invoke("print_cheque", { docId });
+}

@@ -1,4 +1,4 @@
-import { Plus, Minus, Trash2 } from "lucide-react";
+import { Plus, Minus, Trash2, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmtDinars } from "@/lib/format";
 
@@ -6,13 +6,17 @@ interface CartLineProps {
   name: string;
   unitPrice: number;
   quantity: number;
+  discountPercent: number;
+  discountAmount: number; // in millimes
   totalTtc: number;
   onIncrement: () => void;
   onDecrement: () => void;
   onRemove: () => void;
 }
 
-export function CartLine({ name, unitPrice, quantity, totalTtc, onIncrement, onDecrement, onRemove }: CartLineProps) {
+export function CartLine({ name, unitPrice, quantity, discountPercent, discountAmount, totalTtc, onIncrement, onDecrement, onRemove }: CartLineProps) {
+  const discountAmountInDinars = discountAmount / 1000;
+  
   return (
     <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/40 group hover:bg-muted/70 transition-colors">
       <div className="flex-1 min-w-0">
@@ -20,6 +24,13 @@ export function CartLine({ name, unitPrice, quantity, totalTtc, onIncrement, onD
         <p className="text-xs text-muted-foreground tabular-nums">
           {fmtDinars(unitPrice)} × {quantity}
         </p>
+        {(discountPercent > 0 || discountAmount > 0) && (
+          <p className="text-xs text-muted-foreground">
+            {(discountPercent > 0 && <span>-{discountPercent}%</span>)}
+            {(discountPercent > 0 && discountAmount > 0 && " + ")}
+            {(discountAmount > 0 && <span> -{fmtDinars(discountAmountInDinars)}</span>)}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-1">
         <Button variant="outline" size="icon" className="size-7" onClick={onDecrement}>

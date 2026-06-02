@@ -2,8 +2,9 @@ import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Users, Building2, Truck } from "lucide-react";
 import { listPartners, createPartner, fmtDinars } from "../api";
+import { listSalespersons } from "../api/salespersonApi";
 import { useToastStore } from "../api/toastStore";
-import type { Partner, CreatePartner } from "../types";
+import type { Partner, CreatePartner, Salesperson } from "../types";
 import { DataTable } from "@/components/common/DataTable";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -30,15 +31,20 @@ import {
 
 export default function PartnersPage() {
   const [partners, setPartners] = React.useState<Partner[]>([]);
+  const [salespersons, setSalespersons] = React.useState<Salesperson[]>([]);
   const [filterType, setFilterType] = React.useState<"all" | "client" | "supplier">("all");
   const [showForm, setShowForm] = React.useState(false);
   const [form, setForm] = React.useState<CreatePartner>({
     partner_type: "client", code: "", name: "",
     address: "", phone: "", email: "", tax_id: "", credit_limit: 0, notes: "",
+    salesperson_id: null,
   });
   const addToast = useToastStore((s) => s.addToast);
 
-  React.useEffect(() => { load(); }, [filterType]);
+  React.useEffect(() => {
+    load();
+    loadSalespersons();
+  }, [filterType]);
 
   async function load() {
     try {
@@ -47,8 +53,19 @@ export default function PartnersPage() {
     } catch (e) { addToast(String(e), "error"); }
   }
 
+  async function loadSalespersons() {
+    try {
+      const data = await listSalespersons();
+      setSalespersons(data);
+    } catch (e) { addToast(String(e), "error"); }
+  }
+
   function openNew() {
-    setForm({ partner_type: "client", code: "", name: "", address: "", phone: "", email: "", tax_id: "", credit_limit: 0, notes: "" });
+    setForm({ 
+      partner_type: "client", code: "", name: "",
+      address: "", phone: "", email: "", tax_id: "", credit_limit: 0, notes: "",
+      salesperson_id: null,
+    });
     setShowForm(true);
   }
 
@@ -113,6 +130,17 @@ export default function PartnersPage() {
       cell: ({ row }) => (
         <span className="tabular-nums">{fmtDinars(row.original.balance)} D</span>
       ),
+    },
+    {
+      accessorKey: "salesperson_id",
+      header: "Vendeur",
+      cell: ({ row }) => {
+        if (!row.original.salesperson_id) return <span className="text-muted-foreground/40">—</span>;
+        const salesperson = salespersons.find(s => s.id === row.original.salesperson_id);
+        return salesperson ? 
+          <span>{salesperson.first_name} {salesperson.last_name}</span> : 
+          <span className="text-muted-foreground/40">ID: {row.original.salesperson_id}</span>;
+      },
     },
   ];
 
@@ -202,6 +230,23 @@ export default function PartnersPage() {
                 <Label htmlFor="credit">Plafond crédit (D)</Label>
                 <Input id="credit" type="number" step="0.001" value={form.credit_limit / 1000} onChange={(e) => setForm({ ...form, credit_limit: Math.round((parseFloat(e.target.value) || 0) * 1000) })} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="salesperson_id">Vendeur assigné</Label>
+              <Select 
+                id="salesperson_id" 
+                value={form.salesperson_id || ""} 
+                onValueChange={(v) => setForm({ ...form, salesperson_id: v === "" ? null : v })}>
+                <SelectTrigger><SelectValue placeholder="Aucun vendeur assigné" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Aucun vendeur assigné</SelectItem>
+                  {salespersons.map(sp => (
+                    <SelectItem key={sp.id} value={sp.id}>
+                      {sp.first_name} {sp.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
