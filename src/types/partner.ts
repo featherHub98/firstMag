@@ -9,6 +9,7 @@ export interface Partner {
   phone: string;
   email: string;
   tax_id: string;
+  country_id: string | null;
   credit_limit: number;
   balance: number;
   notes: string;
@@ -26,6 +27,7 @@ export interface CreatePartner {
   phone: string;
   email: string;
   tax_id: string;
+  country_id?: string | null;
   credit_limit: number;
   notes: string;
   salesperson_id?: string | null;

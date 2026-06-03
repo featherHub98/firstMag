@@ -1,9 +1,24 @@
 import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Printer, CheckCircle, ArrowRight, FileText, Truck, ClipboardList, RotateCcw, ScrollText } from "lucide-react";
-import { listDocuments, getDocumentLines, transformDocument, confirmDocument, printInvoice, fmtDinars } from "../api";
+import {
+  Printer,
+  CheckCircle,
+  ArrowRight,
+  FileText,
+  WalletCards,
+} from "lucide-react";
+import {
+  listDocuments,
+  getDocumentLines,
+  transformDocument,
+  confirmDocument,
+  setDocumentStatus,
+  printInvoice,
+  fmtDinars,
+} from "../api";
 import { useToastStore } from "../api/toastStore";
-import type { Document, DocumentLine, DocumentType } from "../types";
+import { useUiStore } from "../stores/uiStore";
+import type { Document, DocumentLine, DocumentType, DocumentStatus } from "../types";
 import { DataTable } from "@/components/common/DataTable";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -18,29 +33,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import {
+  documentTypeMeta,
+  getTransformTarget,
+  isPaymentRelevantDoc,
+  statusMeta,
+} from "@/config/documentWorkflow";
 
-const typeConfig: Record<DocumentType, { label: string; icon: React.ReactNode; variant: "info" | "secondary" | "success" | "warning" }> = {
-  quote: { label: "Devis", icon: <ScrollText className="size-3" />, variant: "info" },
-  order: { label: "Commande", icon: <ClipboardList className="size-3" />, variant: "info" },
-  delivery: { label: "Livraison", icon: <Truck className="size-3" />, variant: "secondary" },
-  invoice: { label: "Facture", icon: <FileText className="size-3" />, variant: "success" },
-  credit_note: { label: "Avoir", icon: <RotateCcw className="size-3" />, variant: "warning" },
-  purchase_order: { label: "Cmd. achat", icon: <ClipboardList className="size-3" />, variant: "info" },
-  purchase_delivery: { label: "BL achat", icon: <Truck className="size-3" />, variant: "secondary" },
-  purchase_invoice: { label: "Fact. achat", icon: <FileText className="size-3" />, variant: "success" },
-  purchase_return: { label: "Ret. achat", icon: <RotateCcw className="size-3" />, variant: "warning" },
-};
-
-const statusConfig: Record<string, { variant: "success" | "warning" | "info" | "destructive" | "secondary" }> = {
-  draft: { variant: "warning" },
-  confirmed: { variant: "success" },
-  transformed: { variant: "info" },
-  cancelled: { variant: "destructive" },
-  paid: { variant: "success" },
-  partial: { variant: "warning" },
-};
-
-const tabs: { key: DocumentType | ""; label: string }[] = [
+const salesTabs: { key: DocumentType | ""; label: string }[] = [
   { key: "", label: "Tous" },
   { key: "quote", label: "Devis" },
   { key: "order", label: "Commandes" },
@@ -49,6 +49,8 @@ const tabs: { key: DocumentType | ""; label: string }[] = [
   { key: "credit_note", label: "Avoirs" },
 ];
 
+const allowedSaleTypes: DocumentType[] = ["quote", "order", "delivery", "invoice", "credit_note"];
+
 export default function SalesPage() {
   const [docs, setDocs] = React.useState<Document[]>([]);
   const [filter, setFilter] = React.useState<DocumentType | "">("");
@@ -56,30 +58,47 @@ export default function SalesPage() {
   const [lines, setLines] = React.useState<DocumentLine[]>([]);
   const [loading, setLoading] = React.useState(true);
   const addToast = useToastStore((s) => s.addToast);
+  const showLegacyLabels = useUiStore((s) => s.legacyLabels);
 
   React.useEffect(() => { load(); }, [filter]);
 
   async function load() {
     setLoading(true);
-    try { const data = await listDocuments(filter || undefined); setDocs(data); }
-    catch (e) { addToast(String(e), "error"); }
-    finally { setLoading(false); }
+    try {
+      const data = await listDocuments(filter || undefined);
+      setDocs(data.filter((doc) => allowedSaleTypes.includes(doc.doc_type)));
+    } catch (e) {
+      addToast(String(e), "error");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function openDoc(d: Document) {
     setSelected(d);
-    try { const l = await getDocumentLines(d.id); setLines(l); }
-    catch { setLines([]); }
+    try {
+      const l = await getDocumentLines(d.id);
+      setLines(l);
+    } catch {
+      setLines([]);
+    }
   }
 
   async function handleTransform() {
     if (!selected) return;
+    const target = getTransformTarget(selected.doc_type);
+    if (!target) {
+      addToast("Ce document ne peut pas être transformé.", "warning");
+      return;
+    }
     try {
-      const newDoc = await transformDocument(selected.id);
-      addToast(`Document transformé: ${newDoc.doc_number}`, "success");
+      const newDoc = await transformDocument(selected.id, target);
+      addToast(`Transformé en ${documentTypeMeta[target].label}: ${newDoc.doc_number}`, "success");
       setSelected(null);
       load();
-    } catch (e) { addToast(String(e), "error"); }
+    } catch (e) {
+      addToast(String(e), "error");
+    }
   }
 
   async function handleConfirm() {
@@ -89,7 +108,21 @@ export default function SalesPage() {
       addToast("Document confirmé", "success");
       setSelected(null);
       load();
-    } catch (e) { addToast(String(e), "error"); }
+    } catch (e) {
+      addToast(String(e), "error");
+    }
+  }
+
+  async function handlePaymentVerification(status: Extract<DocumentStatus, "partial" | "paid">) {
+    if (!selected) return;
+    try {
+      await setDocumentStatus(selected.id, status);
+      addToast(status === "paid" ? "Document soldé" : "Règlement partiel enregistré", "success");
+      setSelected({ ...selected, status });
+      load();
+    } catch (e) {
+      addToast(String(e), "error");
+    }
   }
 
   const columns: ColumnDef<Document>[] = [
@@ -102,11 +135,11 @@ export default function SalesPage() {
       accessorKey: "doc_type",
       header: "Type",
       cell: ({ row }) => {
-        const t = typeConfig[row.original.doc_type];
+        const t = documentTypeMeta[row.original.doc_type];
         return (
           <Badge variant={t.variant} className="gap-1">
             {t.icon}
-            {t.label}
+            {showLegacyLabels ? `${t.label} (${t.legacyLabel})` : t.label}
           </Badge>
         );
       },
@@ -119,11 +152,14 @@ export default function SalesPage() {
     {
       accessorKey: "status",
       header: "Statut",
-      cell: ({ row }) => (
-        <Badge variant={statusConfig[row.original.status]?.variant || "secondary"}>
-          {row.original.status}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const meta = statusMeta[row.original.status as DocumentStatus];
+        return (
+          <Badge variant={meta?.variant || "secondary"}>
+            {meta?.label || row.original.status}
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: "total_ttc",
@@ -141,6 +177,8 @@ export default function SalesPage() {
     },
   ];
 
+  const transformTarget = selected ? getTransformTarget(selected.doc_type) : null;
+
   return (
     <div className="h-full flex flex-col">
       <PageHeader
@@ -150,7 +188,7 @@ export default function SalesPage() {
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as DocumentType | "")} className="mb-4">
         <TabsList>
-          {tabs.map((t) => (
+          {salesTabs.map((t) => (
             <TabsTrigger key={t.key} value={t.key}>{t.label}</TabsTrigger>
           ))}
         </TabsList>
@@ -178,10 +216,14 @@ export default function SalesPage() {
             <div className="flex flex-col h-full">
               <SheetHeader className="p-6 border-b">
                 <SheetTitle className="font-mono">{selected.doc_number}</SheetTitle>
-                <SheetDescription>{typeConfig[selected.doc_type]?.label || selected.doc_type}</SheetDescription>
+                <SheetDescription>
+                  {showLegacyLabels
+                    ? `${documentTypeMeta[selected.doc_type].label} - ${documentTypeMeta[selected.doc_type].legacyLabel}`
+                    : documentTypeMeta[selected.doc_type].label}
+                </SheetDescription>
                 <div className="flex items-center gap-2 pt-2">
-                  <Badge variant={statusConfig[selected.status]?.variant || "secondary"}>
-                    {selected.status}
+                  <Badge variant={statusMeta[selected.status as DocumentStatus]?.variant || "secondary"}>
+                    {statusMeta[selected.status as DocumentStatus]?.label || selected.status}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     {new Date(selected.created_at).toLocaleString("fr-FR")}
@@ -249,11 +291,31 @@ export default function SalesPage() {
                     Confirmer
                   </Button>
                 )}
-                {selected.status !== "transformed" && selected.status !== "cancelled" && (
+                {transformTarget && selected.status !== "cancelled" && selected.status !== "paid" && (
                   <Button onClick={handleTransform} variant="outline" className="flex-1">
                     <ArrowRight className="size-4" />
-                    Transformer
+                    Transformer en {documentTypeMeta[transformTarget].label}
                   </Button>
+                )}
+                {isPaymentRelevantDoc(selected.doc_type) && selected.status !== "paid" && (
+                  <>
+                    <Button
+                      onClick={() => handlePaymentVerification("partial")}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <WalletCards className="size-4" />
+                      Règlement partiel
+                    </Button>
+                    <Button
+                      onClick={() => handlePaymentVerification("paid")}
+                      variant="success"
+                      className="flex-1"
+                    >
+                      <CheckCircle className="size-4" />
+                      Soldé
+                    </Button>
+                  </>
                 )}
                 <Button onClick={() => printInvoice(selected.id)} variant="outline" className="flex-1">
                   <Printer className="size-4" />

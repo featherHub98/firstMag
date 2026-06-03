@@ -1,9 +1,9 @@
-use sqlx::SqlitePool;
 use crate::domain::{
-    CreateDocument, CreateDocumentLine, Document, DocumentLine, DocumentType, DocumentStatus,
-    DomainResult, DomainError,
+    CreateDocument, CreateDocumentLine, Document, DocumentLine, DocumentStatus, DocumentType,
+    DomainError, DomainResult,
 };
 use crate::persistence::document_repo;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 pub struct DocumentService;
@@ -14,17 +14,25 @@ impl DocumentService {
         cmd: CreateDocument,
     ) -> DomainResult<(Document, Vec<DocumentLine>)> {
         if cmd.lines.is_empty() {
-            return Err(DomainError::Validation("Le document doit avoir au moins une ligne".into()));
+            return Err(DomainError::Validation(
+                "Le document doit avoir au moins une ligne".into(),
+            ));
         }
         if cmd.partner_id.is_empty() {
-            return Err(DomainError::Validation("Le document doit avoir un tiers".into()));
+            return Err(DomainError::Validation(
+                "Le document doit avoir un tiers".into(),
+            ));
         }
 
         let doc_number = document_repo::get_next_doc_number(pool, cmd.doc_type.as_str()).await?;
         let doc_id = Uuid::new_v4().to_string();
 
         let total_ht: i64 = cmd.lines.iter().map(|l| l.unit_price * l.quantity).sum();
-        let total_tax: i64 = cmd.lines.iter().map(|l| l.unit_price * l.quantity * l.tax_rate / 100).sum();
+        let total_tax: i64 = cmd
+            .lines
+            .iter()
+            .map(|l| l.unit_price * l.quantity * l.tax_rate / 100)
+            .sum();
         let total_ttc = total_ht + total_tax;
 
         let doc = Document::new(
@@ -39,8 +47,10 @@ impl DocumentService {
             total_ttc,
         );
 
-        let lines: Vec<DocumentLine> = cmd.lines.iter().map(|l| {
-            DocumentLine {
+        let lines: Vec<DocumentLine> = cmd
+            .lines
+            .iter()
+            .map(|l| DocumentLine {
                 id: Uuid::new_v4().to_string(),
                 document_id: doc_id.clone(),
                 article_id: l.article_id.clone(),
@@ -50,37 +60,63 @@ impl DocumentService {
                 tax_rate: l.tax_rate,
                 total_ht: l.unit_price * l.quantity,
                 total_ttc: l.unit_price * l.quantity * (100 + l.tax_rate) / 100,
-            }
-        }).collect();
+            })
+            .collect();
 
         document_repo::create_with_lines(pool, &doc, &lines).await?;
         Ok((doc, lines))
     }
 
     pub async fn transform_document(pool: &SqlitePool, doc_id: &str) -> DomainResult<Document> {
+        Self::transform_document_to(pool, doc_id, None).await
+    }
+
+    pub async fn transform_document_to(
+        pool: &SqlitePool,
+        doc_id: &str,
+        target_type: Option<&str>,
+    ) -> DomainResult<Document> {
         let doc = document_repo::get_by_id(pool, doc_id).await?;
 
-        if doc.status != DocumentStatus::Confirmed.as_str() && doc.status != DocumentStatus::Draft.as_str() {
+        if doc.status != DocumentStatus::Confirmed.as_str()
+            && doc.status != DocumentStatus::Draft.as_str()
+        {
             return Err(DomainError::InvalidOperation(
-                "Seuls les documents en brouillon ou confirmés peuvent être transformés".into()
+                "Seuls les documents en brouillon ou confirmés peuvent être transformés".into(),
             ));
         }
 
         let doc_type = DocumentType::from_str(&doc.doc_type)
             .ok_or_else(|| DomainError::InvalidOperation("Type de document inconnu".into()))?;
 
-        let target_type = doc_type.transform_to()
-            .ok_or_else(|| DomainError::InvalidOperation("Ce type de document ne peut pas être transformé".into()))?;
+        let default_target = doc_type.transform_to().ok_or_else(|| {
+            DomainError::InvalidOperation("Ce type de document ne peut pas être transformé".into())
+        })?;
+        let target_type = if let Some(raw) = target_type {
+            DocumentType::from_str(raw)
+                .ok_or_else(|| DomainError::Validation("Type cible invalide".into()))?
+        } else {
+            default_target.clone()
+        };
+
+        if target_type != default_target {
+            return Err(DomainError::InvalidOperation(
+                "Transformation non autorisée pour ce type cible".into(),
+            ));
+        }
 
         let lines = document_repo::get_lines(pool, doc_id).await?;
 
-        let create_lines: Vec<CreateDocumentLine> = lines.iter().map(|l| CreateDocumentLine {
-            article_id: l.article_id.clone(),
-            article_name: l.article_name.clone(),
-            quantity: l.quantity,
-            unit_price: l.unit_price,
-            tax_rate: l.tax_rate,
-        }).collect();
+        let create_lines: Vec<CreateDocumentLine> = lines
+            .iter()
+            .map(|l| CreateDocumentLine {
+                article_id: l.article_id.clone(),
+                article_name: l.article_name.clone(),
+                quantity: l.quantity,
+                unit_price: l.unit_price,
+                tax_rate: l.tax_rate,
+            })
+            .collect();
 
         let cmd = CreateDocument {
             doc_type: target_type,

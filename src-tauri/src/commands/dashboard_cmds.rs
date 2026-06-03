@@ -26,10 +26,7 @@ pub struct DocSummary {
 }
 
 async fn query_i64(pool: &SqlitePool, sql: &str) -> i64 {
-    sqlx::query_scalar(sql)
-        .fetch_one(pool)
-        .await
-        .unwrap_or(0)
+    sqlx::query_scalar(sql).fetch_one(pool).await.unwrap_or(0)
 }
 
 #[tauri::command]
@@ -37,10 +34,22 @@ pub async fn get_dashboard_stats(state: State<'_, AppState>) -> Result<Dashboard
     let pool = &state.db;
 
     let total_articles = query_i64(pool, "SELECT COUNT(*) FROM articles").await;
-    let priced_articles = query_i64(pool, "SELECT COUNT(*) FROM articles WHERE purchase_price > 0").await;
-    let total_clients = query_i64(pool, "SELECT COUNT(*) FROM partners WHERE partner_type='client'").await;
+    let priced_articles = query_i64(
+        pool,
+        "SELECT COUNT(*) FROM articles WHERE purchase_price > 0",
+    )
+    .await;
+    let total_clients = query_i64(
+        pool,
+        "SELECT COUNT(*) FROM partners WHERE partner_type='client'",
+    )
+    .await;
     let total_documents = query_i64(pool, "SELECT COUNT(*) FROM documents").await;
-    let stock_value_pa = query_i64(pool, "SELECT COALESCE(SUM(purchase_price), 0) FROM articles").await;
+    let stock_value_pa = query_i64(
+        pool,
+        "SELECT COALESCE(SUM(purchase_price), 0) FROM articles",
+    )
+    .await;
     let stock_value_pv = query_i64(pool, "SELECT COALESCE(SUM(sale_price), 0) FROM articles").await;
 
     let recent_documents: Vec<DocSummary> = sqlx::query_as::<_, (String, String, String, String, i64, String)>(

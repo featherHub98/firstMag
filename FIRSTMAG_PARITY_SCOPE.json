@@ -1,0 +1,48 @@
+{
+  "meta": {
+    "name": "FIRSTMAG parity scope freeze",
+    "frozen_on": "2026-06-02",
+    "sources": [
+      "C:/Users/PC/Desktop/FIRSTMAG/FIRSTMAG/FIRSTMAG_APP_SCAN.md",
+      "TODO_PROGRESS.txt"
+    ]
+  },
+  "core": [
+    "master_data: articles/families/subfamilies/units/taxes/depots/partners/payment modes",
+    "sales_backoffice: quotes/orders/delivery/invoice/returns with transformations",
+    "purchases_backoffice: PO/receipt/invoice/returns with supplier settlement checks",
+    "stock_control: entry/exit/transfer/verification/import/reporting",
+    "pos_counter: open/close session, cashier operations, hold tickets, payments, cheque flow",
+    "cash_journal: movement log and totals by period/cashier/register",
+    "reporting_baseline: transactional prints and operational states",
+    "fiscal_baseline: connect/print command path and end-of-day report support"
+  ],
+  "advanced": [
+    "crm_deep_profile and loyalty fields",
+    "deferred/global discount logic parity",
+    "complaints/reclamations workflows",
+    "purchase history KPIs and top-client analytics",
+    "management dashboards and advanced query views",
+    "role/authorization matrix parity",
+    "extended hardware configuration and diagnostics",
+    "backup/restore and database verification tooling",
+    "site-to-site scheduled communication"
+  ],
+  "optional_verticals": [
+    "restaurant/table mode",
+    "salon de the workflows",
+    "kitchen printer routing",
+    "fuel station module",
+    "customs declaration module",
+    "medical/occupational module",
+    "budget module",
+    "sms module"
+  ],
+  "ui_middle_ground_rules": [
+    "keep modern component and visual system",
+    "preserve legacy menu order and high-frequency workflow sequence",
+    "preserve keyboard/scanner-first operation patterns",
+    "show legacy naming aliases where it reduces retraining cost",
+    "opt-in classic density for long-time operators"
+  ]
+}

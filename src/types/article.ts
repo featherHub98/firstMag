@@ -52,3 +52,18 @@ export interface UpdateArticle {
   unit_of_measure_id?: string | null;
   active?: boolean;
 }
+
+export interface ArticleCode {
+  id: string;
+  article_id: string;
+  code: string;
+  code_type: "barcode" | "plu";
+  active: boolean;
+  created_at: string;
+}
+
+export interface CreateArticleCode {
+  article_id: string;
+  code: string;
+  code_type: "barcode" | "plu";
+}

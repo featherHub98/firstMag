@@ -1,6 +1,8 @@
 FIRST MAG Application - Implementation Progress
 ================================================
 
+Canonical machine-readable tracker: `TODO_PROGRESS.json`
+
 COMPLETED TASKS:
 - Create FamilyManagement component for product families/sub-families
 - Create UnitOfMeasureManagement component for units of measure
@@ -30,6 +32,7 @@ COMPLETED TASKS:
 
 IN PROGRESS TASKS:
 - Add cash movement journal in POS
+- Sales/purchase lifecycle parity: transform matrix UX + payment status verification actions
 
 PENDING TASKS:
 - Implement X/Z reports for fiscal printer

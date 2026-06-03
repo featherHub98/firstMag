@@ -168,4 +168,25 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: var(--color-muted-foreground);
   }
+
+  .density-classic .h-14 {
+    height: 3rem;
+  }
+  .density-classic .h-9 {
+    height: 2rem;
+  }
+  .density-classic .p-4 {
+    padding: 0.75rem;
+  }
+  .density-classic .md\:p-6 {
+    padding: 1rem;
+  }
+  .density-classic .text-sm {
+    font-size: 0.8rem;
+    line-height: 1.15rem;
+  }
+  .density-classic .text-xs {
+    font-size: 0.7rem;
+    line-height: 0.95rem;
+  }
 }

@@ -1,11 +1,14 @@
-use std::path::PathBuf;
-use std::fs::File;
-use std::io::BufReader;
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::ptr_arg)]
+
+use chrono::Utc;
 use csv::ReaderBuilder;
 use encoding_rs::WINDOWS_1252;
 use sqlx::SqlitePool;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::PathBuf;
 use uuid::Uuid;
-use chrono::Utc;
 
 #[tokio::main]
 async fn main() {
@@ -20,16 +23,30 @@ async fn main() {
     let dir = PathBuf::from(&args[2]);
 
     let pool = SqlitePool::connect(db_path).await.expect("DB connect");
-    sqlx::query("PRAGMA foreign_keys = OFF").execute(&pool).await.ok();
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&pool)
+        .await
+        .ok();
 
     let mut total = 0u64;
 
-    if let Ok(n) = import_articles(&pool, &dir).await { total += n; }
-    if let Ok(n) = import_partners(&pool, &dir).await { total += n; }
-    if let Ok(n) = import_barcodes(&pool, &dir).await { total += n; }
-    if let Ok(n) = import_documents(&pool, &dir).await { total += n; }
+    if let Ok(n) = import_articles(&pool, &dir).await {
+        total += n;
+    }
+    if let Ok(n) = import_partners(&pool, &dir).await {
+        total += n;
+    }
+    if let Ok(n) = import_barcodes(&pool, &dir).await {
+        total += n;
+    }
+    if let Ok(n) = import_documents(&pool, &dir).await {
+        total += n;
+    }
 
-    sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.ok();
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&pool)
+        .await
+        .ok();
     println!("Import terminé: {total} enregistrements");
 }
 
@@ -60,7 +77,11 @@ fn get(rec: &[String], i: usize) -> &str {
 }
 
 fn parse_i64(s: &str) -> i64 {
-    s.trim().replace(',', ".").replace(' ', "").parse().unwrap_or(0)
+    s.trim()
+        .replace(',', ".")
+        .replace(' ', "")
+        .parse()
+        .unwrap_or(0)
 }
 
 fn parse_price_millimes(s: &str) -> i64 {
@@ -75,13 +96,17 @@ fn parse_price_millimes(s: &str) -> i64 {
 
 async fn import_articles(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String> {
     let path = dir.join("ARTICLE.csv");
-    if !path.exists() { return Ok(0); }
+    if !path.exists() {
+        return Ok(0);
+    }
     let rows = read_csv(&path)?;
     let mut n = 0u64;
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
 
     for rec in &rows {
-        if get(rec, 0).is_empty() { continue; }
+        if get(rec, 0).is_empty() {
+            continue;
+        }
         let code = get(rec, 0);
         let name = get(rec, 1);
         let barcode = get(rec, 2);
@@ -94,8 +119,8 @@ async fn import_articles(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String
             "INSERT OR IGNORE INTO articles (id, code, barcode, name, purchase_price, sale_price, unit, active, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
         )
-        .bind(&id).bind(code).bind(barcode).bind(name)
-        .bind(purchase_price).bind(sale_price).bind(unit)
+        .bind(&id).bind(&code).bind(&barcode).bind(&name)
+        .bind(&purchase_price).bind(&sale_price).bind(&unit)
         .bind(&now).bind(&now)
         .execute(pool).await.map_err(|e| format!("Article insert: {e}"))?;
 
@@ -107,14 +132,18 @@ async fn import_articles(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String
 
 async fn import_partners(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String> {
     let path = dir.join("CLIENT.csv");
-    if !path.exists() { return Ok(0); }
+    if !path.exists() {
+        return Ok(0);
+    }
     let rows = read_csv(&path)?;
     let mut n = 0u64;
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
 
     for rec in &rows {
         let code = get(rec, 0);
-        if code.is_empty() { continue; }
+        if code.is_empty() {
+            continue;
+        }
         let name = get(rec, 1);
         let address = get(rec, 2);
         let phone = get(rec, 3);
@@ -125,7 +154,7 @@ async fn import_partners(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String
             "INSERT OR IGNORE INTO partners (id, partner_type, code, name, address, phone, tax_id, active, created_at, updated_at)
              VALUES (?, 'client', ?, ?, ?, ?, ?, 1, ?, ?)"
         )
-        .bind(&id).bind(code).bind(name).bind(address).bind(phone).bind(tax_id)
+        .bind(&id).bind(&code).bind(&name).bind(&address).bind(&phone).bind(&tax_id)
         .bind(&now).bind(&now)
         .execute(pool).await.map_err(|e| format!("Partner insert: {e}"))?;
 
@@ -137,18 +166,25 @@ async fn import_partners(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String
 
 async fn import_barcodes(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String> {
     let path = dir.join("CODEABARRE.csv");
-    if !path.exists() { return Ok(0); }
+    if !path.exists() {
+        return Ok(0);
+    }
     let rows = read_csv(&path)?;
     let mut n = 0u64;
 
     for rec in &rows {
         let code = get(rec, 0);
         let barcode = get(rec, 1);
-        if code.is_empty() || barcode.is_empty() { continue; }
+        if code.is_empty() || barcode.is_empty() {
+            continue;
+        }
 
         let r = sqlx::query("UPDATE articles SET barcode = ? WHERE code = ? AND barcode = ''")
-            .bind(barcode).bind(code)
-            .execute(pool).await.map_err(|e| format!("Barcode update: {e}"))?;
+            .bind(&barcode)
+            .bind(&code)
+            .execute(pool)
+            .await
+            .map_err(|e| format!("Barcode update: {e}"))?;
 
         n += r.rows_affected();
     }
@@ -159,7 +195,9 @@ async fn import_barcodes(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String
 async fn import_documents(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, String> {
     let entete_path = dir.join("ENTETE.csv");
     let ligne_path = dir.join("LIGNE.csv");
-    if !entete_path.exists() || !ligne_path.exists() { return Ok(0); }
+    if !entete_path.exists() || !ligne_path.exists() {
+        return Ok(0);
+    }
 
     let headers = read_csv(&entete_path)?;
     let lines = read_csv(&ligne_path)?;
@@ -169,7 +207,9 @@ async fn import_documents(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, Strin
 
     for rec in &headers {
         let num = get(rec, 0);
-        if num.is_empty() { continue; }
+        if num.is_empty() {
+            continue;
+        }
         let partner_code = get(rec, 1);
         let total_ht = parse_price_millimes(get(rec, 2));
         let total_tax = parse_price_millimes(get(rec, 3));
@@ -184,9 +224,9 @@ async fn import_documents(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, Strin
              (id, doc_type, doc_number, status, partner_id, partner_name, total_ht, total_tax, total_ttc, notes, created_at, updated_at)
              VALUES (?, 'invoice', ?, 'confirmed', ?, '', ?, ?, ?, '', ?, ?)"
         )
-        .bind(&doc_id).bind(num).bind(partner_code)
-        .bind(total_ht).bind(total_tax).bind(total_ttc)
-        .bind(dt).bind(dt)
+        .bind(&doc_id).bind(&num).bind(&partner_code)
+        .bind(&total_ht).bind(&total_tax).bind(&total_ttc)
+        .bind(&dt).bind(&dt)
         .execute(pool).await.map_err(|e| format!("Doc insert: {e}"))?;
 
         doc_map.insert(num.to_string(), doc_id);
@@ -210,12 +250,14 @@ async fn import_documents(pool: &SqlitePool, dir: &PathBuf) -> Result<u64, Strin
             "INSERT INTO document_lines (id, document_id, article_id, article_name, quantity, unit_price, tax_rate, total_ht, total_ttc)
              VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)"
         )
-        .bind(&line_id).bind(&doc_id).bind(article_code).bind("")
-        .bind(qty).bind(price)
-        .bind(total_ht).bind(total_ttc)
+        .bind(&line_id).bind(&doc_id).bind(&article_code).bind(&"")
+        .bind(&qty).bind(&price)
+        .bind(&total_ht).bind(&total_ttc)
         .execute(pool).await.map_err(|e| format!("Line insert: {e}"))?;
     }
 
     println!("  Documents: {n} entêtes importées");
     Ok(n)
 }
+
+

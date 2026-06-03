@@ -1,7 +1,7 @@
-use tauri::State;
-use crate::AppState;
-use crate::domain::{Partner, CreatePartner};
+use crate::domain::{CreatePartner, Partner};
 use crate::persistence::partner_repo;
+use crate::AppState;
+use tauri::State;
 
 #[tauri::command]
 pub async fn list_partners(

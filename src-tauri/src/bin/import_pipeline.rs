@@ -11,15 +11,32 @@ fn main() {
         std::process::exit(1);
     }
     let db = &args[1];
-    let hfsql_dir = args.get(2).cloned().unwrap_or_else(|| "C:\\ProgramData\\FIRSTMAG".to_string());
+    let hfsql_dir = args
+        .get(2)
+        .cloned()
+        .unwrap_or_else(|| "C:\\ProgramData\\FIRSTMAG".to_string());
     let work_dir = env::temp_dir().join("firstmag_import");
     fs::create_dir_all(&work_dir).ok();
-    let bin_dir = env::current_exe().ok().and_then(|p| p.parent().map(|x| x.to_path_buf()))
+    let bin_dir = env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|x| x.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."));
 
-    let init = bin_dir.join(if cfg!(windows) { "init_db.exe" } else { "init_db" });
-    let extract = bin_dir.join(if cfg!(windows) { "hfsql_extract.exe" } else { "hfsql_extract" });
-    let import = bin_dir.join(if cfg!(windows) { "import_hfsql.exe" } else { "import_hfsql" });
+    let init = bin_dir.join(if cfg!(windows) {
+        "init_db.exe"
+    } else {
+        "init_db"
+    });
+    let extract = bin_dir.join(if cfg!(windows) {
+        "hfsql_extract.exe"
+    } else {
+        "hfsql_extract"
+    });
+    let import = bin_dir.join(if cfg!(windows) {
+        "import_hfsql.exe"
+    } else {
+        "import_hfsql"
+    });
 
     let run = |exe: &PathBuf, a: &[&str]| -> bool {
         let out = Command::new(exe).args(a).output();

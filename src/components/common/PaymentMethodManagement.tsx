@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function PaymentMethodManagement() {
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
@@ -219,8 +219,3 @@ export default function PaymentMethodManagement() {
   );
 }
 
-// Import Select component (we'll need to create this or use an existing one)
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// Import Skeleton (we'll need to create this or use an existing one)
-import { Skeleton } from "@/components/ui/skeleton";

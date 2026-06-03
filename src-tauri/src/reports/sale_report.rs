@@ -1,10 +1,14 @@
-use printpdf::*;
 use crate::domain::SaleReport;
+use printpdf::*;
 
 pub fn generate_sale_report(report: &SaleReport, title: &str) -> Result<Vec<u8>, String> {
     let (doc, page, layer) = PdfDocument::new("report", Mm(210.0), Mm(297.0), "Layer 1");
-    let font = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| e.to_string())?;
-    let bold = doc.add_builtin_font(BuiltinFont::HelveticaBold).map_err(|e| e.to_string())?;
+    let font = doc
+        .add_builtin_font(BuiltinFont::Helvetica)
+        .map_err(|e| e.to_string())?;
+    let bold = doc
+        .add_builtin_font(BuiltinFont::HelveticaBold)
+        .map_err(|e| e.to_string())?;
     let page = doc.get_page(page);
     let layer = page.get_layer(layer);
 
@@ -15,7 +19,13 @@ pub fn generate_sale_report(report: &SaleReport, title: &str) -> Result<Vec<u8>,
     y -= 7.0;
     layer.use_text(title, 14.0, Mm(20.0), Mm(y), &bold);
     y -= 6.0;
-    layer.use_text(&format!("Du: {}  Au: {}", &report.period_start, &report.period_end), fs, Mm(20.0), Mm(y), &font);
+    layer.use_text(
+        &format!("Du: {}  Au: {}", &report.period_start, &report.period_end),
+        fs,
+        Mm(20.0),
+        Mm(y),
+        &font,
+    );
     y -= 10.0;
 
     hr(&layer, 20.0, y, 170.0);
@@ -25,11 +35,25 @@ pub fn generate_sale_report(report: &SaleReport, title: &str) -> Result<Vec<u8>,
     let val_w = 160.0_f32;
 
     lbl(&layer, "Transactions:", fs, label_w, y, &font);
-    val(&layer, &report.total_transactions.to_string(), fs, val_w, y, &bold);
+    val(
+        &layer,
+        &report.total_transactions.to_string(),
+        fs,
+        val_w,
+        y,
+        &bold,
+    );
     y -= 5.5;
 
     lbl(&layer, "Articles vendus:", fs, label_w, y, &font);
-    val(&layer, &report.total_quantity.to_string(), fs, val_w, y, &bold);
+    val(
+        &layer,
+        &report.total_quantity.to_string(),
+        fs,
+        val_w,
+        y,
+        &bold,
+    );
     y -= 5.5;
 
     lbl(&layer, "Total HT:", fs, label_w, y, &font);
@@ -63,7 +87,10 @@ fn hr(layer: &PdfLayerReference, x: f32, y: f32, w: f32) {
         (Point::new(Mm(x), Mm(y)), false),
         (Point::new(Mm(x + w), Mm(y)), false),
     ];
-    let line = Line { points, is_closed: false };
+    let line = Line {
+        points,
+        is_closed: false,
+    };
     layer.set_outline_color(Color::Rgb(Rgb::new(0.6_f32, 0.6_f32, 0.6_f32, None)));
     layer.add_line(line);
 }

@@ -3,8 +3,9 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Users, Building2, Truck } from "lucide-react";
 import { listPartners, createPartner, fmtDinars } from "../api";
 import { listSalespersons } from "../api/salespersonApi";
+import { listCountries } from "../api/countryApi";
 import { useToastStore } from "../api/toastStore";
-import type { Partner, CreatePartner, Salesperson } from "../types";
+import type { Partner, CreatePartner, Salesperson, Country } from "../types";
 import { DataTable } from "@/components/common/DataTable";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -32,18 +33,21 @@ import {
 export default function PartnersPage() {
   const [partners, setPartners] = React.useState<Partner[]>([]);
   const [salespersons, setSalespersons] = React.useState<Salesperson[]>([]);
+  const [countries, setCountries] = React.useState<Country[]>([]);
   const [filterType, setFilterType] = React.useState<"all" | "client" | "supplier">("all");
   const [showForm, setShowForm] = React.useState(false);
   const [form, setForm] = React.useState<CreatePartner>({
     partner_type: "client", code: "", name: "",
     address: "", phone: "", email: "", tax_id: "", credit_limit: 0, notes: "",
     salesperson_id: null,
+    country_id: null,
   });
   const addToast = useToastStore((s) => s.addToast);
 
   React.useEffect(() => {
     load();
     loadSalespersons();
+    loadCountries();
   }, [filterType]);
 
   async function load() {
@@ -60,11 +64,19 @@ export default function PartnersPage() {
     } catch (e) { addToast(String(e), "error"); }
   }
 
+  async function loadCountries() {
+    try {
+      const data = await listCountries();
+      setCountries(data.filter((c) => c.active));
+    } catch (e) { addToast(String(e), "error"); }
+  }
+
   function openNew() {
     setForm({ 
       partner_type: "client", code: "", name: "",
       address: "", phone: "", email: "", tax_id: "", credit_limit: 0, notes: "",
       salesperson_id: null,
+      country_id: null,
     });
     setShowForm(true);
   }
@@ -221,10 +233,27 @@ export default function PartnersPage() {
                 <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="tax_id">Matricule fiscal</Label>
                 <Input id="tax_id" value={form.tax_id} onChange={(e) => setForm({ ...form, tax_id: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="country_id">Pays</Label>
+                <Select
+                  value={form.country_id ?? "__none__"}
+                  onValueChange={(v) => setForm({ ...form, country_id: v === "__none__" ? null : v })}
+                >
+                  <SelectTrigger id="country_id"><SelectValue placeholder="Aucun pays" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Aucun pays</SelectItem>
+                    {countries.map((country) => (
+                      <SelectItem key={country.id} value={country.id}>
+                        {country.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="credit">Plafond crédit (D)</Label>
@@ -233,13 +262,11 @@ export default function PartnersPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="salesperson_id">Vendeur assigné</Label>
-              <Select 
-                id="salesperson_id" 
-                value={form.salesperson_id || ""} 
-                onValueChange={(v) => setForm({ ...form, salesperson_id: v === "" ? null : v })}>
+              <Select value={form.salesperson_id ?? "__none__"} 
+                onValueChange={(v) => setForm({ ...form, salesperson_id: v === "__none__" ? null : v })}>
                 <SelectTrigger><SelectValue placeholder="Aucun vendeur assigné" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Aucun vendeur assigné</SelectItem>
+                  <SelectItem value="__none__">Aucun vendeur assigné</SelectItem>
                   {salespersons.map(sp => (
                     <SelectItem key={sp.id} value={sp.id}>
                       {sp.first_name} {sp.last_name}

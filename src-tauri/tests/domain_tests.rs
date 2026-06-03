@@ -14,14 +14,23 @@ fn test_document_type_invalid() {
 
 #[test]
 fn test_document_status_roundtrip() {
-    assert_eq!(DocumentStatus::from_str("draft"), Some(DocumentStatus::Draft));
-    assert_eq!(DocumentStatus::from_str("confirmed"), Some(DocumentStatus::Confirmed));
+    assert_eq!(
+        DocumentStatus::from_str("draft"),
+        Some(DocumentStatus::Draft)
+    );
+    assert_eq!(
+        DocumentStatus::from_str("confirmed"),
+        Some(DocumentStatus::Confirmed)
+    );
 }
 
 #[test]
 fn test_partner_type_roundtrip() {
     assert_eq!(PartnerType::from_str("client"), Some(PartnerType::Client));
-    assert_eq!(PartnerType::from_str("supplier"), Some(PartnerType::Supplier));
+    assert_eq!(
+        PartnerType::from_str("supplier"),
+        Some(PartnerType::Supplier)
+    );
 }
 
 #[test]
@@ -44,7 +53,12 @@ fn test_invoice_tax_computation() {
 
 #[test]
 fn test_document_status_all() {
-    for s in [DocumentStatus::Draft, DocumentStatus::Confirmed, DocumentStatus::Transformed, DocumentStatus::Cancelled] {
+    for s in [
+        DocumentStatus::Draft,
+        DocumentStatus::Confirmed,
+        DocumentStatus::Transformed,
+        DocumentStatus::Cancelled,
+    ] {
         assert_eq!(DocumentStatus::from_str(s.as_str()), Some(s));
     }
 }
@@ -52,7 +66,10 @@ fn test_document_status_all() {
 #[test]
 fn test_partner_type_all() {
     assert_eq!(PartnerType::from_str("client"), Some(PartnerType::Client));
-    assert_eq!(PartnerType::from_str("supplier"), Some(PartnerType::Supplier));
+    assert_eq!(
+        PartnerType::from_str("supplier"),
+        Some(PartnerType::Supplier)
+    );
 }
 
 #[test]

@@ -2,7 +2,13 @@ export type DocumentType =
   | "quote" | "order" | "delivery" | "invoice" | "credit_note"
   | "purchase_order" | "purchase_delivery" | "purchase_invoice" | "purchase_return";
 
-export type DocumentStatus = "draft" | "confirmed" | "transformed" | "cancelled";
+export type DocumentStatus =
+  | "draft"
+  | "confirmed"
+  | "transformed"
+  | "cancelled"
+  | "partial"
+  | "paid";
 
 export interface Document {
   id: string;

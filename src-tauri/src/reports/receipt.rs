@@ -1,5 +1,5 @@
-use printpdf::*;
 use crate::domain::{Document, DocumentLine};
+use printpdf::*;
 
 const PAGE_W: f32 = 80.0;
 const PAGE_H: f32 = 297.0;
@@ -15,8 +15,12 @@ pub struct ReceiptData<'a> {
 
 pub fn generate_receipt(data: &ReceiptData) -> Result<Vec<u8>, String> {
     let (doc, page, layer) = PdfDocument::new("receipt", Mm(PAGE_W), Mm(PAGE_H), "Layer 1");
-    let font = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| e.to_string())?;
-    let bold = doc.add_builtin_font(BuiltinFont::HelveticaBold).map_err(|e| e.to_string())?;
+    let font = doc
+        .add_builtin_font(BuiltinFont::Helvetica)
+        .map_err(|e| e.to_string())?;
+    let bold = doc
+        .add_builtin_font(BuiltinFont::HelveticaBold)
+        .map_err(|e| e.to_string())?;
     let page = doc.get_page(page);
     let layer = page.get_layer(layer);
 
@@ -51,7 +55,9 @@ pub fn generate_receipt(data: &ReceiptData) -> Result<Vec<u8>, String> {
     y -= 4.0;
 
     for line in data.lines {
-        if y < 15.0 { break; }
+        if y < 15.0 {
+            break;
+        }
         let name = if line.article_name.len() > 24 {
             format!("{}…", &line.article_name[..23])
         } else {
@@ -99,7 +105,10 @@ fn draw_hr(layer: &PdfLayerReference, x: f32, y: f32, w: f32, gray: f32) {
         (Point::new(Mm(x), Mm(y)), false),
         (Point::new(Mm(x + w), Mm(y)), false),
     ];
-    let line = Line { points, is_closed: false };
+    let line = Line {
+        points,
+        is_closed: false,
+    };
     layer.set_outline_color(Color::Rgb(Rgb::new(gray, gray, gray, None)));
     layer.add_line(line);
 }

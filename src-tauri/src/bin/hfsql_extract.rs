@@ -1,3 +1,8 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::manual_pattern_char_comparison)]
+#![allow(clippy::op_ref)]
+#![allow(clippy::ptr_arg)]
+
 use std::collections::HashSet;
 use std::env;
 use std::fs;
@@ -64,7 +69,8 @@ fn decode_cp1252(bytes: &[u8]) -> String {
 }
 
 fn trim_field(s: &str) -> String {
-    s.trim_end_matches(|c: char| c == '\0' || c == ' ').to_string()
+    s.trim_end_matches(|c: char| c == '\0' || c == ' ')
+        .to_string()
 }
 
 fn try_parse_article(block: &[u8], article_offset: usize) -> Option<(String, String, f64, f64)> {
@@ -161,12 +167,17 @@ const CLIENT_MARKER_LEN: usize = 11;
 
 fn find_markers_len(data: &[u8], marker_len: usize) -> Vec<usize> {
     let mut positions = Vec::new();
-    if data.len() < marker_len { return positions; }
+    if data.len() < marker_len {
+        return positions;
+    }
     let mut i = 0;
     while i + marker_len <= data.len() {
         let mut match_all = true;
         for j in 0..marker_len {
-            if data[i + j] != 0xFF { match_all = false; break; }
+            if data[i + j] != 0xFF {
+                match_all = false;
+                break;
+            }
         }
         if match_all {
             positions.push(i);
@@ -187,9 +198,13 @@ fn extract_clients(fic_path: &PathBuf, csv_path: &PathBuf) -> std::io::Result<us
 
     for w in markers.windows(2).skip(1) {
         let body = &data[w[0] + CLIENT_MARKER_LEN..w[1]];
-        if body.len() < 180 { continue; }
+        if body.len() < 180 {
+            continue;
+        }
         let code = trim_field(&decode_cp1252(&body[0..20]));
-        if code.is_empty() || seen.contains(&code) { continue; }
+        if code.is_empty() || seen.contains(&code) {
+            continue;
+        }
         let name = trim_field(&decode_cp1252(&body[21..81]));
         let address = trim_field(&decode_cp1252(&body[82..122]));
         let phone = trim_field(&decode_cp1252(&body[123..153]));
@@ -212,7 +227,9 @@ fn extract_plu_barcodes(fic_dir: &PathBuf, csv_path: &PathBuf) -> std::io::Resul
     let mut count = 0usize;
 
     for plu_path in &plu_paths {
-        if !plu_path.exists() { continue; }
+        if !plu_path.exists() {
+            continue;
+        }
         if let Ok(plu_data) = fs::read_to_string(plu_path) {
             for line in plu_data.lines() {
                 let parts: Vec<&str> = line.split(';').collect();
@@ -252,8 +269,14 @@ fn main() {
     }
     let article_csv = csv_dir.join("ARTICLE.csv");
     let _n_art = match extract_articles(&article_fic, &article_csv) {
-        Ok(n) => { println!("ARTICLE.FIC: {n} records -> {}", article_csv.display()); n }
-        Err(e) => { eprintln!("ARTICLE.FIC: error: {e}"); 0 }
+        Ok(n) => {
+            println!("ARTICLE.FIC: {n} records -> {}", article_csv.display());
+            n
+        }
+        Err(e) => {
+            eprintln!("ARTICLE.FIC: error: {e}");
+            0
+        }
     };
 
     // Extract CLIENT.FIC
@@ -269,7 +292,10 @@ fn main() {
     // Extract CODEABARRE.csv from PLU.TXT / OLYMPIAPLU.TXT
     let codeabarre_csv = csv_dir.join("CODEABARRE.csv");
     match extract_plu_barcodes(&fic_dir, &codeabarre_csv) {
-        Ok(n) => println!("PLU.TXT: {n} barcode mappings -> {}", codeabarre_csv.display()),
+        Ok(n) => println!(
+            "PLU.TXT: {n} barcode mappings -> {}",
+            codeabarre_csv.display()
+        ),
         Err(e) => eprintln!("PLU.TXT: error: {e}"),
     }
 }

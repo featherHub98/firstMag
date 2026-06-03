@@ -1,4 +1,4 @@
-import { Plus, Minus, Trash2, Percent } from "lucide-react";
+import { Plus, Minus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmtDinars } from "@/lib/format";
 

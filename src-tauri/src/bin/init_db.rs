@@ -1,3 +1,5 @@
+#![allow(clippy::needless_borrows_for_generic_args)]
+
 use sqlx::SqlitePool;
 use std::env;
 use std::fs;
@@ -43,8 +45,13 @@ async fn main() {
         ("tax-0", "Exonéré", 0u64),
     ] {
         sqlx::query("INSERT OR IGNORE INTO tax_rates (id, name, rate) VALUES (?, ?, ?)")
-            .bind(id).bind(name).bind(rate as i64)
-            .execute(&pool).await.ok();
+            .bind(&id)
+            .bind(&name)
+            .bind(rate as i64)
+            .execute(&pool)
+            .await
+            .ok();
     }
     println!("Initialized {db}");
 }
+

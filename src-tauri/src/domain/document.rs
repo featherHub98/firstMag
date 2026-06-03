@@ -1,16 +1,25 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DocumentType {
+    #[serde(rename = "quote", alias = "Quote")]
     Quote,
+    #[serde(rename = "order", alias = "Order")]
     Order,
+    #[serde(rename = "delivery", alias = "Delivery")]
     Delivery,
+    #[serde(rename = "invoice", alias = "Invoice")]
     Invoice,
+    #[serde(rename = "credit_note", alias = "CreditNote")]
     CreditNote,
+    #[serde(rename = "purchase_order", alias = "PurchaseOrder")]
     PurchaseOrder,
+    #[serde(rename = "purchase_delivery", alias = "PurchaseDelivery")]
     PurchaseDelivery,
+    #[serde(rename = "purchase_invoice", alias = "PurchaseInvoice")]
     PurchaseInvoice,
+    #[serde(rename = "purchase_return", alias = "PurchaseReturn")]
     PurchaseReturn,
 }
 
@@ -30,7 +39,7 @@ impl DocumentType {
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
-        match s {
+        match s.to_ascii_lowercase().as_str() {
             "quote" => Some(Self::Quote),
             "order" => Some(Self::Order),
             "delivery" => Some(Self::Delivery),
@@ -45,11 +54,20 @@ impl DocumentType {
     }
 
     pub fn is_sale(&self) -> bool {
-        matches!(self, Self::Quote | Self::Order | Self::Delivery | Self::Invoice | Self::CreditNote)
+        matches!(
+            self,
+            Self::Quote | Self::Order | Self::Delivery | Self::Invoice | Self::CreditNote
+        )
     }
 
     pub fn is_purchase(&self) -> bool {
-        matches!(self, Self::PurchaseOrder | Self::PurchaseDelivery | Self::PurchaseInvoice | Self::PurchaseReturn)
+        matches!(
+            self,
+            Self::PurchaseOrder
+                | Self::PurchaseDelivery
+                | Self::PurchaseInvoice
+                | Self::PurchaseReturn
+        )
     }
 
     pub fn transform_to(&self) -> Option<DocumentType> {
@@ -66,10 +84,18 @@ impl DocumentType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DocumentStatus {
+    #[serde(rename = "draft", alias = "Draft")]
     Draft,
+    #[serde(rename = "confirmed", alias = "Confirmed")]
     Confirmed,
+    #[serde(rename = "transformed", alias = "Transformed")]
     Transformed,
+    #[serde(rename = "cancelled", alias = "Cancelled")]
     Cancelled,
+    #[serde(rename = "partial", alias = "Partial")]
+    Partial,
+    #[serde(rename = "paid", alias = "Paid")]
+    Paid,
 }
 
 impl DocumentStatus {
@@ -79,15 +105,19 @@ impl DocumentStatus {
             Self::Confirmed => "confirmed",
             Self::Transformed => "transformed",
             Self::Cancelled => "cancelled",
+            Self::Partial => "partial",
+            Self::Paid => "paid",
         }
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
-        match s {
+        match s.to_ascii_lowercase().as_str() {
             "draft" => Some(Self::Draft),
             "confirmed" => Some(Self::Confirmed),
             "transformed" => Some(Self::Transformed),
             "cancelled" => Some(Self::Cancelled),
+            "partial" => Some(Self::Partial),
+            "paid" => Some(Self::Paid),
             _ => None,
         }
     }
@@ -143,19 +173,32 @@ pub struct CreateDocumentLine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::from_str;
 
     #[test]
     fn test_document_type_from_str() {
-        assert_eq!(DocumentType::from_str("invoice"), Some(DocumentType::Invoice));
+        assert_eq!(
+            DocumentType::from_str("invoice"),
+            Some(DocumentType::Invoice)
+        );
         assert_eq!(DocumentType::from_str("quote"), Some(DocumentType::Quote));
         assert_eq!(DocumentType::from_str("unknown"), None);
     }
 
     #[test]
     fn test_document_type_transform() {
-        assert_eq!(DocumentType::Quote.transform_to(), Some(DocumentType::Order));
-        assert_eq!(DocumentType::Order.transform_to(), Some(DocumentType::Delivery));
-        assert_eq!(DocumentType::Delivery.transform_to(), Some(DocumentType::Invoice));
+        assert_eq!(
+            DocumentType::Quote.transform_to(),
+            Some(DocumentType::Order)
+        );
+        assert_eq!(
+            DocumentType::Order.transform_to(),
+            Some(DocumentType::Delivery)
+        );
+        assert_eq!(
+            DocumentType::Delivery.transform_to(),
+            Some(DocumentType::Invoice)
+        );
         assert_eq!(DocumentType::Invoice.transform_to(), None);
     }
 
@@ -167,23 +210,67 @@ mod tests {
 
     #[test]
     fn test_document_status_roundtrip() {
-        for s in [DocumentStatus::Draft, DocumentStatus::Confirmed, DocumentStatus::Transformed, DocumentStatus::Cancelled] {
+        for s in [
+            DocumentStatus::Draft,
+            DocumentStatus::Confirmed,
+            DocumentStatus::Transformed,
+            DocumentStatus::Cancelled,
+            DocumentStatus::Partial,
+            DocumentStatus::Paid,
+        ] {
             assert_eq!(DocumentStatus::from_str(s.as_str()), Some(s));
         }
     }
 
     #[test]
     fn test_document_new() {
-        let doc = Document::new("id1".into(), "invoice", "FACT-000001", "p1", "Client X", "note", 1000, 190, 1190);
+        let doc = Document::new(
+            "id1".into(),
+            "invoice",
+            "FACT-000001",
+            "p1",
+            "Client X",
+            "note",
+            1000,
+            190,
+            1190,
+        );
         assert_eq!(doc.doc_type, "invoice");
         assert_eq!(doc.status, "draft");
         assert_eq!(doc.total_ttc, 1190);
     }
+
+    #[test]
+    fn test_document_type_serde_accepts_lowercase() {
+        assert_eq!(from_str::<DocumentType>("\"invoice\"").ok(), Some(DocumentType::Invoice));
+        assert_eq!(
+            from_str::<DocumentType>("\"purchase_return\"").ok(),
+            Some(DocumentType::PurchaseReturn)
+        );
+    }
+
+    #[test]
+    fn test_document_type_serde_accepts_legacy_pascal_case() {
+        assert_eq!(from_str::<DocumentType>("\"Invoice\"").ok(), Some(DocumentType::Invoice));
+        assert_eq!(
+            from_str::<DocumentType>("\"PurchaseReturn\"").ok(),
+            Some(DocumentType::PurchaseReturn)
+        );
+    }
 }
 
 impl Document {
-    pub fn new(id: String, doc_type: &str, doc_number: &str, partner_id: &str, partner_name: &str, notes: &str,
-               total_ht: i64, total_tax: i64, total_ttc: i64) -> Self {
+    pub fn new(
+        id: String,
+        doc_type: &str,
+        doc_number: &str,
+        partner_id: &str,
+        partner_name: &str,
+        notes: &str,
+        total_ht: i64,
+        total_tax: i64,
+        total_ttc: i64,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id,

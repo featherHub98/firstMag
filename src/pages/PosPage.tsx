@@ -1,10 +1,12 @@
 import * as React from "react";
-import { Barcode, Banknote, CreditCard, Wallet, FileText, ShoppingCart, Search, ScanLine, Check, Settings, Loader2, Trash2, Clock, Menu, User, DollarSign, Banknote as BanknoteIcon, RefreshCw } from "lucide-react";
+import { Barcode, Banknote, CreditCard, Wallet, FileText, ShoppingCart, Search, ScanLine, Check, Trash2, Clock, User } from "lucide-react";
 import { useCartStore } from "../stores/cartStore";
+import type { CartLine as CartStoreLine, HeldCart as HeldCartState, HoldCartContext } from "../stores/cartStore";
 import { useSessionStore } from "../stores/sessionStore";
-import { searchArticles, createDocument, printInvoice, printReceipt, printCheque, fmtDinars, dinarsToMillimes } from "../api";
+import { searchArticles, createDocument, printInvoice, printReceipt, printCheque, setDocumentStatus, getPartner, getPartnerProfile, fmtDinars, dinarsToMillimes } from "../api";
+import { searchPartners } from "../api/partnerApi";
 import { useToastStore } from "../api/toastStore";
-import type { Article, CreateDocumentLine, HeldCart, Partner } from "../types";
+import type { Article, CreateDocumentLine, Partner } from "../types";
 import { ProductCard } from "@/components/pos/ProductCard";
 import { CartLine } from "@/components/pos/CartLine";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,7 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { RegisterOpening } from "@/components/pos/RegisterOpening";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import RegisterOpening from "@/components/pos/RegisterOpening";
+import { CashMovementJournal } from "@/components/pos/CashMovementJournal";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +27,14 @@ import {
 } from "@/components/ui/dialog";
 
 type PaymentMode = "cash" | "card" | "cheque" | "transfer";
+type PaymentLineDraft = {
+  id: string;
+  mode: PaymentMode;
+  amount: string;
+  reference: string;
+  chequeBank: string;
+  chequeDueDate: string;
+};
 
 const paymentModes: { key: PaymentMode; label: string; icon: React.ReactNode }[] = [
   { key: "cash", label: "Espèces", icon: <Banknote className="size-4" /> },
@@ -39,12 +52,21 @@ export default function PosPage() {
    const [showCustomerSearch, setShowCustomerSearch] = React.useState(false);
    const [showCashMovement, setShowCashMovement] = React.useState(false);
    const [paymentMode, setPaymentMode] = React.useState<PaymentMode>("cash");
-   const [amountGiven, setAmountGiven] = React.useState("");
+   const [paymentLines, setPaymentLines] = React.useState<PaymentLineDraft[]>([]);
+   const [globalDiscountMillimes, setGlobalDiscountMillimes] = React.useState(0);
+   const [deferPayment, setDeferPayment] = React.useState(false);
    const [lastDocId, setLastDocId] = React.useState("");
+   const [receiptLines, setReceiptLines] = React.useState<CartStoreLine[]>([]);
+   const [receiptTotalTtc, setReceiptTotalTtc] = React.useState(0);
+   const [receiptCustomerLabel, setReceiptCustomerLabel] = React.useState("Vente au comptant");
+   const [receiptPayments, setReceiptPayments] = React.useState<PaymentLineDraft[]>([]);
+   const [receiptChange, setReceiptChange] = React.useState(0);
+   const [receiptStatus, setReceiptStatus] = React.useState<"partial" | "paid">("paid");
    const [highlightId, setHighlightId] = React.useState<string | null>(null);
    const [customerSearch, setCustomerSearch] = React.useState("");
    const [customerResults, setCustomerResults] = React.useState<Partner[]>([]);
    const [selectedCustomerId, setSelectedCustomerId] = React.useState<string | null>(null);
+   const [selectedCustomer, setSelectedCustomer] = React.useState<Partner | null>(null);
    const cartLines = useCartStore((s) => s.lines);
    const totalHt = useCartStore((s) => s.total_ht);
    const totalTtc = useCartStore((s) => s.total_ttc);
@@ -57,10 +79,9 @@ export default function PosPage() {
    const deleteHeldCart = useCartStore((s) => s.deleteHeldCart);
    const heldCarts = useCartStore((s) => s.heldCarts);
    const registerOpen = useSessionStore((s) => s.registerOpen);
-   const openingFund = useSessionStore((s) => s.openingFund);
-   const customerId = useSessionStore((s) => s.customerId);
    const customerName = useSessionStore((s) => s.customerName);
    const customerBalance = useSessionStore((s) => s.customerBalance);
+   const setCustomer = useSessionStore((s) => s.setCustomer);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const addToast = useToastStore((s) => s.addToast);
 
@@ -68,9 +89,43 @@ export default function PosPage() {
 
    React.useEffect(() => {
      function onKey(e: KeyboardEvent) {
+       const target = e.target as HTMLElement | null;
+       const tag = target?.tagName?.toLowerCase();
+       const isTypingField =
+         tag === "input" || tag === "textarea" || target?.isContentEditable === true;
+
+       // If focus is lost from the scanner field, keep numpad/keyboard entry working.
+       if (!isTypingField && document.activeElement === document.body) {
+         const isPrintable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+         if (isPrintable || e.key === "Backspace") {
+           e.preventDefault();
+           const nextValue =
+             e.key === "Backspace"
+               ? search.slice(0, -1)
+               : `${search}${e.key === "," ? "." : e.key}`;
+           setSearch(nextValue);
+           if (nextValue.trim().length < 1) {
+             setResults([]);
+           } else {
+             void searchArticles(nextValue.trim())
+               .then(setResults)
+               .catch(() => setResults([]));
+           }
+           requestAnimationFrame(() => inputRef.current?.focus());
+           return;
+         }
+       }
+
        if (e.key === "F1") { e.preventDefault(); inputRef.current?.focus(); }
        if (e.key === "F2" && cartLines.length > 0 && registerOpen) { e.preventDefault(); setShowPay(true); }
-       if (e.key === "F3") { e.preventDefault(); setShowHeld(true); }
+       if (e.key === "F3") {
+         e.preventDefault();
+         if (cartLines.length > 0) {
+           handleHoldCurrentTicket();
+         } else {
+           setShowHeld(true);
+         }
+       }
        if (e.key === "F4") { e.preventDefault(); setShowCustomerSearch(true); }
        if (e.key === "F5") { e.preventDefault(); setShowCashMovement(true); }
        if (e.key === "Escape") { 
@@ -83,7 +138,7 @@ export default function PosPage() {
      }
      window.addEventListener("keydown", onKey);
      return () => window.removeEventListener("keydown", onKey);
-   }, [cartLines.length, registerOpen]);
+   }, [cartLines.length, registerOpen, search]);
 
    const handleSearch = React.useCallback(async (q: string) => {
      setSearch(q);
@@ -141,50 +196,274 @@ export default function PosPage() {
     }
   }, [search, addToCart, addToast]);
 
-async function handlePay() {
-     if (cartLines.length === 0 || !registerOpen) return;
-     // Use selected customer or fallback to walk-in customer
-     const partnerId = selectedCustomerId || "walk-in";
-     const partnerName = selectedCustomerId 
-       ? customerResults.find(c => c.id === selectedCustomerId)?.name || "Client"
-       : "Client comptant";
-       
-     const lines: CreateDocumentLine[] = cartLines.map((l) => {
-       // Calculate the unit price after applying discounts
-       const basePrice = l.unit_price;
-       const discountPercentAmount = basePrice * (l.discount_percent / 100);
-       const discountAmount = l.discount_amount / 1000; // Convert millimes to dinars
-       const finalUnitPrice = basePrice - discountPercentAmount - discountAmount;
-       
-       return {
-         article_id: l.article_id,
-         article_name: l.article_name,
-         quantity: l.quantity,
-         unit_price: dinarsToMillimes(finalUnitPrice),
-         tax_rate: l.tax_rate,
-       };
-     });
-     try {
-       const [doc] = await createDocument({
-         doc_type: "invoice",
-         partner_id: partnerId,
-         partner_name: partnerName,
-         notes: "",
-         lines,
-       });
-       setLastDocId(doc.id);
-       clearCart();
-       setShowPay(false);
-       setShowReceipt(true);
-       addToast("Vente enregistrée", "success");
-     } catch (e) {
-       addToast(String(e), "error");
-     }
-   }
+  function makePaymentLine(mode: PaymentMode, amountMillimes: number): PaymentLineDraft {
+    return {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      mode,
+      amount: (amountMillimes / 1000).toFixed(3),
+      reference: "",
+      chequeBank: "",
+      chequeDueDate: "",
+    };
+  }
 
-  const change = amountGiven
-    ? Math.max(0, Math.round(parseFloat(amountGiven || "0") * 1000) - totalTtc)
-    : 0;
+  const paidTotal = React.useMemo(
+    () =>
+      paymentLines.reduce((sum, line) => {
+        const value = Math.round((parseFloat(line.amount || "0") || 0) * 1000);
+        return sum + Math.max(0, value);
+      }, 0),
+    [paymentLines],
+  );
+  const nonCashPaid = React.useMemo(
+    () =>
+      paymentLines
+        .filter((line) => line.mode !== "cash")
+        .reduce((sum, line) => {
+          const value = Math.round((parseFloat(line.amount || "0") || 0) * 1000);
+          return sum + Math.max(0, value);
+        }, 0),
+    [paymentLines],
+  );
+  const cashPaid = React.useMemo(
+    () =>
+      paymentLines
+        .filter((line) => line.mode === "cash")
+        .reduce((sum, line) => {
+          const value = Math.round((parseFloat(line.amount || "0") || 0) * 1000);
+          return sum + Math.max(0, value);
+        }, 0),
+    [paymentLines],
+  );
+
+  const discountedTotalTtc = Math.max(0, totalTtc - globalDiscountMillimes);
+  const remainingAfterNonCash = Math.max(0, discountedTotalTtc - nonCashPaid);
+  const remainingToPay = Math.max(0, discountedTotalTtc - paidTotal);
+  const change = Math.max(0, cashPaid - remainingAfterNonCash);
+  const outstandingDebt = Math.max(0, -customerBalance);
+  const availableCredit = selectedCustomer ? Math.max(0, selectedCustomer.credit_limit - outstandingDebt) : 0;
+
+  React.useEffect(() => {
+    if (!showPay) return;
+    if (paymentLines.length === 0) {
+      setPaymentLines([makePaymentLine(paymentMode, discountedTotalTtc)]);
+    }
+  }, [showPay, paymentMode, paymentLines.length, discountedTotalTtc]);
+
+  React.useEffect(() => {
+    if (!selectedCustomerId && deferPayment) {
+      setDeferPayment(false);
+    }
+  }, [selectedCustomerId, deferPayment]);
+
+  function addPaymentLine(mode: PaymentMode = paymentMode) {
+    setPaymentLines((prev) => [...prev, makePaymentLine(mode, 0)]);
+  }
+
+  function updatePaymentLine(id: string, patch: Partial<PaymentLineDraft>) {
+    setPaymentLines((prev) => prev.map((line) => (line.id === id ? { ...line, ...patch } : line)));
+  }
+
+  function removePaymentLine(id: string) {
+    setPaymentLines((prev) => prev.filter((line) => line.id !== id));
+  }
+
+  function setFirstCashAmount(valueDinars: number) {
+    const value = Math.max(0, valueDinars);
+    setPaymentLines((prev) => {
+      const cashIdx = prev.findIndex((line) => line.mode === "cash");
+      const amount = value.toFixed(3);
+      if (cashIdx < 0) {
+        return [...prev, { ...makePaymentLine("cash", 0), amount }];
+      }
+      const clone = [...prev];
+      clone[cashIdx] = { ...clone[cashIdx], amount };
+      return clone;
+    });
+  }
+
+  function buildHoldContext(): HoldCartContext {
+    return {
+      customer_id: selectedCustomerId,
+      customer_name: selectedCustomer?.name || customerName || null,
+      customer_balance: customerBalance,
+      customer_credit_limit: selectedCustomer?.credit_limit || 0,
+      global_discount_millimes: globalDiscountMillimes,
+      defer_payment: deferPayment,
+    };
+  }
+
+  async function applyRestoredContext(heldCart: HeldCartState) {
+    setGlobalDiscountMillimes(heldCart.global_discount_millimes || 0);
+    setDeferPayment(Boolean(heldCart.defer_payment));
+    if (heldCart.customer_id && heldCart.customer_name) {
+      setSelectedCustomerId(heldCart.customer_id);
+      try {
+        const partner = await getPartner(heldCart.customer_id);
+        setSelectedCustomer(partner);
+        setCustomer(partner.id, partner.name, partner.balance);
+      } catch {
+        setSelectedCustomer({
+          id: heldCart.customer_id,
+          partner_type: "client",
+          code: "",
+          name: heldCart.customer_name,
+          address: "",
+          phone: "",
+          email: "",
+          tax_id: "",
+          country_id: null,
+          credit_limit: heldCart.customer_credit_limit || 0,
+          balance: heldCart.customer_balance || 0,
+          notes: "",
+          salesperson_id: null,
+          active: true,
+          created_at: "",
+          updated_at: "",
+        });
+        setCustomer(heldCart.customer_id, heldCart.customer_name, heldCart.customer_balance || 0);
+      }
+      return;
+    }
+    setSelectedCustomerId(null);
+    setSelectedCustomer(null);
+    setCustomer(null, null, 0);
+  }
+
+  function handleHoldCurrentTicket() {
+    if (cartLines.length === 0) {
+      addToast("Aucun article a mettre en attente", "info");
+      return;
+    }
+    const id = holdCart("", buildHoldContext());
+    if (!id) {
+      addToast("Impossible de mettre le ticket en attente", "error");
+      return;
+    }
+    setShowHeld(true);
+    addToast("Ticket mis en attente", "success");
+  }
+
+  async function applyCustomerProfileDefaults(partnerId: string) {
+    try {
+      const profile = await getPartnerProfile(partnerId);
+      if (profile.global_discount_millimes > 0) {
+        setGlobalDiscountMillimes(profile.global_discount_millimes);
+      }
+      if (profile.allow_deferred_payment && availableCredit > 0) {
+        setDeferPayment(true);
+      }
+    } catch {
+      // optional profile defaults
+    }
+  }
+
+  async function handlePay() {
+    if (cartLines.length === 0 || !registerOpen) return;
+    if (paymentLines.length === 0) {
+      addToast("Ajoutez au moins une ligne de paiement", "error");
+      return;
+    }
+    for (const line of paymentLines) {
+      const amount = Math.round((parseFloat(line.amount || "0") || 0) * 1000);
+      if (amount <= 0) {
+        addToast("Chaque ligne de paiement doit avoir un montant valide", "error");
+        return;
+      }
+      if (line.mode === "cheque" && !line.reference.trim()) {
+        addToast("Le numéro de chèque est obligatoire", "error");
+        return;
+      }
+    }
+    if (nonCashPaid > discountedTotalTtc) {
+      addToast("Les paiements non espèces dépassent le montant à encaisser", "error");
+      return;
+    }
+    if (!deferPayment && paidTotal < discountedTotalTtc) {
+      addToast("Montant encaissé insuffisant", "error");
+      return;
+    }
+
+    const partnerId = selectedCustomerId || "walk-in";
+    const partnerName = selectedCustomerId
+      ? selectedCustomer?.name || customerName || "Client"
+      : "Client comptant";
+
+    const lines: CreateDocumentLine[] = cartLines.map((l) => {
+      const basePrice = l.unit_price;
+      const discountPercentAmount = basePrice * (l.discount_percent / 100);
+      const discountAmount = l.discount_amount / 1000;
+      const baseNetUnitPrice = basePrice - discountPercentAmount - discountAmount;
+      const discountRatio = totalTtc > 0 ? discountedTotalTtc / totalTtc : 1;
+      const finalUnitPrice = Math.max(0, baseNetUnitPrice * discountRatio);
+      return {
+        article_id: l.article_id,
+        article_name: l.article_name,
+        quantity: l.quantity,
+        unit_price: dinarsToMillimes(finalUnitPrice),
+        tax_rate: l.tax_rate,
+      };
+    });
+
+    const paymentNote = paymentLines
+      .map((line) => {
+        const parts: string[] = [`${line.mode.toUpperCase()}: ${line.amount} D`];
+        if (line.reference.trim()) parts.push(`Ref ${line.reference.trim()}`);
+        if (line.chequeBank.trim()) parts.push(`Banque ${line.chequeBank.trim()}`);
+        if (line.chequeDueDate.trim()) parts.push(`Échéance ${line.chequeDueDate.trim()}`);
+        return parts.join(" | ");
+      })
+      .join("\n");
+    const settlementStatus: "partial" | "paid" = paidTotal >= discountedTotalTtc ? "paid" : "partial";
+    const dueAmount = Math.max(0, discountedTotalTtc - paidTotal);
+    if (deferPayment) {
+      if (!selectedCustomerId || !selectedCustomer) {
+        addToast("Le paiement differe exige un client selectionne", "error");
+        return;
+      }
+      const allowedCredit = Math.max(0, selectedCustomer.credit_limit - Math.max(0, -customerBalance));
+      if (dueAmount > allowedCredit) {
+        addToast(`Credit insuffisant (disponible: ${fmtDinars(allowedCredit)} D)`, "error");
+        return;
+      }
+    }
+
+    try {
+      const [doc] = await createDocument({
+        doc_type: "invoice",
+        partner_id: partnerId,
+        partner_name: partnerName,
+        notes: [
+          paymentNote,
+          globalDiscountMillimes > 0 ? `REMISE_GLOBALE: ${fmtDinars(globalDiscountMillimes)} D` : "",
+          settlementStatus === "partial" ? `RESTE_A_PAYER: ${fmtDinars(dueAmount)} D` : "",
+        ].filter(Boolean).join("\n"),
+        lines,
+      });
+      await setDocumentStatus(doc.id, settlementStatus);
+      setLastDocId(doc.id);
+      setReceiptLines(cartLines);
+      setReceiptTotalTtc(discountedTotalTtc);
+      setReceiptCustomerLabel(selectedCustomerId ? `Client: ${customerName || partnerName}` : "Vente au comptant");
+      setReceiptPayments(paymentLines);
+      setReceiptChange(change);
+      setReceiptStatus(settlementStatus);
+      if (selectedCustomerId && selectedCustomer && settlementStatus === "partial") {
+        const nextBalance = customerBalance - dueAmount;
+        setCustomer(selectedCustomerId, selectedCustomer.name, nextBalance);
+        setSelectedCustomer({ ...selectedCustomer, balance: nextBalance });
+      }
+      clearCart();
+      setShowPay(false);
+      setShowReceipt(true);
+      setPaymentLines([]);
+      setGlobalDiscountMillimes(0);
+      setDeferPayment(false);
+      addToast("Vente enregistrée", "success");
+    } catch (e) {
+      addToast(String(e), "error");
+    }
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -213,6 +492,7 @@ async function handlePay() {
             <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               ref={inputRef}
+              data-scanner-focus="true"
               value={search}
               onChange={(e) => handleSearch(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -230,7 +510,7 @@ async function handlePay() {
                 onClick={() => addToCart(a)}
                 highlight={highlightId === a.id}
               />
-            ))}
+              ))}
             {search.length > 0 && results.length === 0 && (
               <div className="col-span-full text-center py-12">
                 <Search className="size-10 mx-auto text-muted-foreground/40 mb-2" />
@@ -267,7 +547,7 @@ async function handlePay() {
                  onDecrement={() => updateQuantity(i, line.quantity - 1)}
                  onRemove={() => removeLine(i)}
                />
-             ))}
+              ))}
             {cartLines.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <ShoppingCart className="size-10 mx-auto opacity-30 mb-2" />
@@ -290,11 +570,20 @@ async function handlePay() {
                 Annuler
               </Button>
               <Button
+                onClick={handleHoldCurrentTicket}
+                variant="outline"
+                size="lg"
+                disabled={cartLines.length === 0}
+                className="flex-1"
+              >
+                En attente
+              </Button>
+              <Button
                 onClick={() => setShowPay(true)}
                 variant="default"
                 size="lg"
                 disabled={cartLines.length === 0 || !registerOpen}
-                className="flex-[2]"
+                className="flex-1"
               >
                 Paiement
               </Button>
@@ -307,9 +596,7 @@ async function handlePay() {
        <RegisterOpening />
 
        {/* Cash Movement Journal Dialog */}
-       <Dialog open={showCashMovement} onOpenChange={setShowCashMovement}>
-         <CashMovementJournal onClose={() => setShowCashMovement(false)} />
-       </Dialog>
+       {showCashMovement && <CashMovementJournal onClose={() => setShowCashMovement(false)} />}
 
        {/* Customer Search Dialog */}
        <Dialog open={showCustomerSearch} onOpenChange={setShowCustomerSearch}>
@@ -341,13 +628,15 @@ async function handlePay() {
                      variant={selectedCustomerId === partner.id ? "default" : "outline"}
                      onClick={() => {
                        setSelectedCustomerId(partner.id);
+                       setSelectedCustomer(partner);
                        // Update session with customer info
-                       useSessionStore.getState().setCustomer(
-                         partner.id, 
-                         partner.name, 
-                         partner.balance
-                       );
-                       setShowCustomerSearch(false);
+                        setCustomer(
+                          partner.id, 
+                          partner.name, 
+                          partner.balance
+                        );
+                        void applyCustomerProfileDefaults(partner.id);
+                        setShowCustomerSearch(false);
                        addToast(`Client sélectionné: ${partner.name}`, "success");
                      }}
                      className="w-full text-left flex items-center justify-between px-4 py-3"
@@ -371,8 +660,8 @@ async function handlePay() {
                          )}
                        </span>
                      )}
-                   </div>
-                 ))}
+                    </Button>
+                  ))}
                </div>
              )}
              
@@ -386,7 +675,9 @@ async function handlePay() {
            <DialogFooter>
              <Button variant="outline" onClick={() => {
                setSelectedCustomerId(null);
-               useSessionStore.getState().setCustomer(null, null, 0);
+               setSelectedCustomer(null);
+               setDeferPayment(false);
+               setCustomer(null, null, 0);
                setShowCustomerSearch(false);
              }}>
                Annuler
@@ -398,8 +689,9 @@ async function handlePay() {
                  Utiliser ce client
                </Button>
              )}
-           </DialogFooter>
-       </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
        {/* Held/Suspended Tickets Dialog */}
        <Dialog open={showHeld} onOpenChange={setShowHeld}>
@@ -419,8 +711,17 @@ async function handlePay() {
                    <Button
                      key={cart.id}
                      variant="outline"
-                     onClick={() => {
-                       if (restoreCart(cart.id)) {
+                     onClick={async () => {
+                       if (cartLines.length > 0) {
+                         const heldCurrent = holdCart("Ticket courant", buildHoldContext());
+                         if (heldCurrent) {
+                           addToast("Ticket courant mis en attente avant restauration", "info");
+                         }
+                       }
+                       const restored = restoreCart(cart.id);
+                       if (restored) {
+                         await applyRestoredContext(restored);
+                         deleteHeldCart(cart.id);
                          setShowHeld(false);
                          addToast(`Ticket "${cart.name}" restauré`, "success");
                        }
@@ -437,6 +738,30 @@ async function handlePay() {
                        <Badge variant="secondary">{cart.lines.length}</Badge>
                        <Button
                          variant="ghost"
+                         size="icon"
+                         onClick={async (e) => {
+                           e.stopPropagation();
+                           if (cartLines.length > 0) {
+                             const heldCurrent = holdCart("Ticket courant", buildHoldContext());
+                             if (heldCurrent) {
+                               addToast("Ticket courant mis en attente avant encaissement", "info");
+                             }
+                           }
+                           const restored = restoreCart(cart.id);
+                           if (restored) {
+                             await applyRestoredContext(restored);
+                             deleteHeldCart(cart.id);
+                             setShowHeld(false);
+                             setShowPay(true);
+                             addToast(`Ticket "${cart.name}" restauré pour encaissement`, "success");
+                           }
+                         }}
+                         aria-label="Restaurer et encaisser"
+                       >
+                         <Check className="size-4" />
+                       </Button>
+                       <Button
+                         variant="ghost"
                                      size="icon"
                                      onClick={(e) => {
                                        e.stopPropagation();
@@ -446,20 +771,32 @@ async function handlePay() {
                                      aria-label="Supprimer le ticket"
                                    >
                                      <Trash2 className="size-4" />
-                                   </div>
-                                 </Button>
-                               ))}
+                                    </Button>
+                                  </div>
+                                </Button>
+                              ))}
              </div>
            )}
          </div>
-         <DialogFooter>
-           <Button variant="outline" onClick={() => setShowHeld(false)}>
-             Fermer
-           </Button>
-         </DialogFooter>
-       </Dialog>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowHeld(false)}>
+              Fermer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+        </Dialog>
 
-       <Dialog open={showPay} onOpenChange={setShowPay}>
+       <Dialog
+         open={showPay}
+         onOpenChange={(open) => {
+           setShowPay(open);
+           if (!open) {
+             setPaymentLines([]);
+             setGlobalDiscountMillimes(0);
+             setDeferPayment(false);
+           }
+         }}
+       >
            <DialogContent className="max-w-md">
              <DialogHeader>
                <DialogTitle>Encaissement</DialogTitle>
@@ -467,7 +804,17 @@ async function handlePay() {
              <div className="space-y-4">
                <div className="text-center">
                  <p className="text-sm text-muted-foreground">À encaisser</p>
-                 <p className="text-4xl font-bold tabular-nums">{fmtDinars(totalTtc)} D</p>
+                 <p className="text-4xl font-bold tabular-nums">{fmtDinars(discountedTotalTtc)} D</p>
+                 {globalDiscountMillimes > 0 && (
+                   <p className="text-xs text-muted-foreground mt-1">
+                     Remise globale: -{fmtDinars(globalDiscountMillimes)} D
+                   </p>
+                 )}
+                 {selectedCustomer && (
+                   <p className="text-xs text-muted-foreground">
+                     Credit client: {fmtDinars(selectedCustomer.credit_limit)} D • Solde courant: {fmtDinars(customerBalance)} D • Credit dispo: {fmtDinars(availableCredit)} D
+                   </p>
+                 )}
                </div>
                <Separator />
                {/* Discount Controls */}
@@ -478,35 +825,42 @@ async function handlePay() {
                      <Button
                        variant="outline"
                        size="sm"
-                       onClick={() => {
-                         // Apply 5% discount to selected item or show discount dialog
-                         addToast("Remise de 5% appliquée", "info");
-                       }}
+                       onClick={() => setGlobalDiscountMillimes(Math.round(totalTtc * 0.05))}
                      >
                        -5%
                      </Button>
                      <Button
                        variant="outline"
                        size="sm"
-                       onClick={() => {
-                         // Apply 10% discount to selected item or show discount dialog
-                         addToast("Remise de 10% appliquée", "info");
-                       }}
+                       onClick={() => setGlobalDiscountMillimes(Math.round(totalTtc * 0.1))}
                      >
                        -10%
                      </Button>
                      <Button
                        variant="outline"
                        size="sm"
-                       onClick={() => {
-                         // Apply fixed amount discount
-                         addToast("Remise fixe appliquée", "info");
-                       }}
+                       onClick={() => setGlobalDiscountMillimes(Math.min(totalTtc, 5000))}
                      >
                        -5DT
                      </Button>
+                     <Button variant="ghost" size="sm" onClick={() => setGlobalDiscountMillimes(0)}>
+                       RAZ
+                     </Button>
                    </div>
                  </div>
+                 {selectedCustomerId && (
+                   <div className="flex items-center gap-2">
+                     <Checkbox
+                       id="defer-payment"
+                       checked={deferPayment}
+                       disabled={remainingToPay > 0 && availableCredit <= 0}
+                       onCheckedChange={(checked) => setDeferPayment(Boolean(checked))}
+                     />
+                     <Label htmlFor="defer-payment" className="text-xs text-muted-foreground">
+                       Différer le règlement client (paiement partiel autorisé)
+                     </Label>
+                   </div>
+                 )}
                </div>
                {/* End Discount Controls */}
                <div className="grid grid-cols-2 gap-2">
@@ -514,7 +868,10 @@ async function handlePay() {
                    <Button
                      key={m.key}
                      variant={paymentMode === m.key ? "default" : "outline"}
-                     onClick={() => setPaymentMode(m.key)}
+                     onClick={() => {
+                       setPaymentMode(m.key);
+                       addPaymentLine(m.key);
+                     }}
                      className="h-12"
                    >
                      {m.icon}
@@ -522,44 +879,108 @@ async function handlePay() {
                    </Button>
                  ))}
                </div>
-               {paymentMode === "cash" && (
-                 <div className="space-y-2">
-                   <div className="flex items-center gap-2">
-                     <Input
-                       value={amountGiven}
-                       onChange={(e) => setAmountGiven(e.target.value)}
-                       placeholder="0.000"
-                       inputMode="decimal"
-                       className="h-12 text-lg font-bold text-right tabular-nums"
-                     />
-                     <span className="text-sm text-muted-foreground">D</span>
+               <div className="space-y-2">
+                 {paymentLines.map((line) => (
+                   <div key={line.id} className="rounded-lg border p-2 space-y-2">
+                     <div className="flex items-center gap-2">
+                       <select
+                         className="h-9 rounded border bg-background px-2 text-sm"
+                         value={line.mode}
+                         onChange={(e) => updatePaymentLine(line.id, { mode: e.target.value as PaymentMode })}
+                       >
+                         {paymentModes.map((m) => (
+                           <option key={m.key} value={m.key}>
+                             {m.label}
+                           </option>
+                         ))}
+                       </select>
+                       <Input
+                         value={line.amount}
+                         onChange={(e) => updatePaymentLine(line.id, { amount: e.target.value })}
+                         placeholder="0.000"
+                         inputMode="decimal"
+                         className="h-9 text-right tabular-nums"
+                       />
+                       <Button
+                         variant="ghost"
+                         size="icon"
+                         onClick={() => removePaymentLine(line.id)}
+                         aria-label="Supprimer ligne paiement"
+                       >
+                         <Trash2 className="size-4" />
+                       </Button>
+                     </div>
+                     {(line.mode === "cheque" || line.mode === "transfer") && (
+                       <Input
+                         value={line.reference}
+                         onChange={(e) => updatePaymentLine(line.id, { reference: e.target.value })}
+                         placeholder={line.mode === "cheque" ? "Numéro chèque" : "Référence virement"}
+                         className="h-9"
+                       />
+                     )}
+                     {line.mode === "cheque" && (
+                       <div className="grid grid-cols-2 gap-2">
+                         <Input
+                           value={line.chequeBank}
+                           onChange={(e) => updatePaymentLine(line.id, { chequeBank: e.target.value })}
+                           placeholder="Banque"
+                           className="h-9"
+                         />
+                         <Input
+                           type="date"
+                           value={line.chequeDueDate}
+                           onChange={(e) => updatePaymentLine(line.id, { chequeDueDate: e.target.value })}
+                           className="h-9"
+                         />
+                       </div>
+                     )}
                    </div>
-                   <div className="grid grid-cols-4 gap-1.5">
-                     <Button variant="outline" size="sm" onClick={() => setAmountGiven((totalTtc / 1000).toFixed(3))}>
-                       Exact
-                     </Button>
-                     <Button variant="outline" size="sm" onClick={() => setAmountGiven((parseFloat(amountGiven || "0") + 1).toFixed(3))}>
-                       +1
-                     </Button>
-                     <Button variant="outline" size="sm" onClick={() => setAmountGiven((parseFloat(amountGiven || "0") + 5).toFixed(3))}>
-                       +5
-                     </Button>
-                     <Button variant="outline" size="sm" onClick={() => setAmountGiven((parseFloat(amountGiven || "0") + 10).toFixed(3))}>
-                       +10
-                     </Button>
+                 ))}
+                 <div className="grid grid-cols-4 gap-1.5">
+                   <Button variant="outline" size="sm" onClick={() => setFirstCashAmount(discountedTotalTtc / 1000)}>
+                     Exact
+                   </Button>
+                   <Button variant="outline" size="sm" onClick={() => setFirstCashAmount(cashPaid / 1000 + 1)}>
+                     +1
+                   </Button>
+                   <Button variant="outline" size="sm" onClick={() => setFirstCashAmount(cashPaid / 1000 + 5)}>
+                     +5
+                   </Button>
+                   <Button variant="outline" size="sm" onClick={() => setFirstCashAmount(cashPaid / 1000 + 10)}>
+                     +10
+                   </Button>
+                 </div>
+                 <div className="rounded-lg border p-3 text-sm space-y-1">
+                   <div className="flex justify-between">
+                     <span className="text-muted-foreground">Total payé</span>
+                     <span className="font-mono">{fmtDinars(paidTotal)} D</span>
+                   </div>
+                   <div className="flex justify-between">
+                     <span className="text-muted-foreground">Reste</span>
+                     <span className="font-mono">{fmtDinars(remainingToPay)} D</span>
                    </div>
                    {change > 0 && (
-                     <div className="rounded-lg bg-emerald-100 dark:bg-emerald-900/30 p-3 text-center">
-                       <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Monnaie à rendre</p>
-                       <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{fmtDinars(change)} D</p>
+                     <div className="flex justify-between">
+                       <span className="text-muted-foreground">Monnaie à rendre</span>
+                       <span className="font-mono">{fmtDinars(change)} D</span>
                      </div>
                    )}
                  </div>
-               )}
+               </div>
              </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPay(false)}>Annuler</Button>
-            <Button variant="success" onClick={handlePay} disabled={paymentMode === "cash" && Math.round(parseFloat(amountGiven || "0") * 1000) < totalTtc}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPay(false);
+                setPaymentLines([]);
+                setGlobalDiscountMillimes(0);
+                setDeferPayment(false);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button variant="success" onClick={handlePay} disabled={!deferPayment && paidTotal < discountedTotalTtc}>
               <Check className="size-4" />
               Confirmer
             </Button>
@@ -577,19 +998,21 @@ async function handlePay() {
           </DialogHeader>
            <div className="bg-muted/50 rounded-lg p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap border">
              {`      FIRST MAG
-${selectedCustomerId ? `Client: ${customerName || "Inconnu"}` : "Vente au comptant"}
+${receiptCustomerLabel}
 ${"─".repeat(32)}
 `}
-             {cartLines.map((l, i) => (
+             {receiptLines.map((l, i) => (
                <span key={i}>
                  {`${l.article_name.slice(0, 22).padEnd(22)}
     ${fmtDinars(l.unit_price)} × ${l.quantity}   ${fmtDinars(l.total_ttc)}
 `}
+                </span>
              ))}
              {`${"─".repeat(32)}
-Total TTC:  ${fmtDinars(totalTtc).padStart(12)} D
-${paymentMode === "cash" ? `Versé:      ${(parseFloat(amountGiven || "0")).toFixed(3).padStart(12)} D
-Monnaie:    ${fmtDinars(change).padStart(12)} D` : `Paiement:  ${paymentModes.find((m) => m.key === paymentMode)?.label}`}
+Total TTC:  ${fmtDinars(receiptTotalTtc).padStart(12)} D
+${receiptPayments.map((line) => `${line.mode.toUpperCase().padEnd(8)} ${line.amount.padStart(12)} D`).join("\n")}
+${receiptChange > 0 ? `Monnaie:    ${fmtDinars(receiptChange).padStart(12)} D` : ""}
+${receiptStatus === "partial" ? "Statut:     REGLEMENT PARTIEL" : "Statut:     REGLE"}
 ${"─".repeat(32)}
    Merci de votre visite !`}
            </div>
@@ -600,7 +1023,7 @@ ${"─".repeat(32)}
              <Button onClick={() => { printReceipt(lastDocId); addToast("Ticket imprimé", "info"); }}>
                Ticket
              </Button>
-             {paymentMode === "cheque" && (
+             {receiptPayments.some((p) => p.mode === "cheque") && (
                <Button onClick={() => { 
                  printCheque(lastDocId); 
                  addToast("Chèque imprimé", "info"); 

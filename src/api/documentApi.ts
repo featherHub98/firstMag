@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Document, DocumentLine, CreateDocument } from "../types";
+import type { Document, DocumentLine, CreateDocument, DocumentStatus, DocumentType } from "../types";
 
 export async function listDocuments(docType?: string): Promise<Document[]> {
   return invoke("list_documents", { docType });
@@ -17,12 +17,16 @@ export async function createDocument(cmd: CreateDocument): Promise<[Document, Do
   return invoke("create_document", { cmd });
 }
 
-export async function transformDocument(id: string): Promise<Document> {
-  return invoke("transform_document", { id });
+export async function transformDocument(id: string, targetType?: DocumentType): Promise<Document> {
+  return invoke("transform_document", { id, targetType });
 }
 
 export async function confirmDocument(id: string): Promise<void> {
   return invoke("confirm_document", { id });
+}
+
+export async function setDocumentStatus(id: string, status: DocumentStatus): Promise<void> {
+  return invoke("set_document_status", { id, status });
 }
 
 export async function printInvoice(docId: string): Promise<void> {

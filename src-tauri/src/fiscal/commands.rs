@@ -8,7 +8,10 @@ pub struct FiscalDevice {
 impl FiscalDevice {
     pub fn open(port_name: &str, baud: u32) -> Result<Self, String> {
         let port = FiscalPort::open(port_name, baud)?;
-        Ok(Self { port, in_ticket: false })
+        Ok(Self {
+            port,
+            in_ticket: false,
+        })
     }
 
     pub fn cpx(&mut self, operator: &str, customer: &str) -> Result<String, String> {

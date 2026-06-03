@@ -132,7 +132,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & {
         data-state={state}
         data-collapsible={collapsible}
         className={cn(
-          "flex h-full shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r transition-[width] duration-200 ease-linear group/sidebar-wrapper",
+          "flex h-full shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r transition-[width] duration-100 ease-out motion-reduce:transition-none group/sidebar-wrapper",
           widthClass,
           className,
         )}

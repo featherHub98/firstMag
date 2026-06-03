@@ -1,4 +1,4 @@
-use serialport::{SerialPort, SerialPortBuilder};
+use serialport::SerialPort;
 use std::io::{Read, Write};
 use std::time::Duration;
 
@@ -39,7 +39,9 @@ impl FiscalPort {
                 Ok(resp) => return Ok(resp),
                 Err(e) => {
                     if attempt == retries {
-                        return Err(format!("Fiscal command '{cmd}' failed after {retries} retries: {e}"));
+                        return Err(format!(
+                            "Fiscal command '{cmd}' failed after {retries} retries: {e}"
+                        ));
                     }
                 }
             }
@@ -58,16 +60,26 @@ impl FiscalPort {
         frame.push(bcc);
 
         self.port.flush().ok();
-        self.port.write_all(&frame).map_err(|e| format!("Write error: {e}"))?;
+        self.port
+            .write_all(&frame)
+            .map_err(|e| format!("Write error: {e}"))?;
 
         let mut reply = [0u8; 1024];
-        let n = self.port.read(&mut reply).map_err(|e| format!("Read error: {e}"))?;
+        let n = self
+            .port
+            .read(&mut reply)
+            .map_err(|e| format!("Read error: {e}"))?;
         if n == 0 {
             return Err("Pas de réponse de l'imprimante fiscale".to_string());
         }
 
         let resp_text = |buf: &[u8], start: usize, end: usize| -> String {
-            buf[start..end].iter().map(|&b| b as char).collect::<String>().trim().to_string()
+            buf[start..end]
+                .iter()
+                .map(|&b| b as char)
+                .collect::<String>()
+                .trim()
+                .to_string()
         };
 
         if n >= 2 && reply[0] == STX {
@@ -78,18 +90,35 @@ impl FiscalPort {
         if reply[0] == ACK {
             return if n > 1 {
                 let code = resp_text(&reply, 1, n);
-                if code.is_empty() { Ok("OK".to_string()) } else { Ok(code) }
+                if code.is_empty() {
+                    Ok("OK".to_string())
+                } else {
+                    Ok(code)
+                }
             } else {
                 Ok("OK".to_string())
             };
         }
 
         if reply[0] == NAK {
-            let code = if n > 1 { resp_text(&reply, 1, n) } else { "?".to_string() };
+            let code = if n > 1 {
+                resp_text(&reply, 1, n)
+            } else {
+                "?".to_string()
+            };
             return Err(format!("NAK: {code}"));
         }
 
-        let raw: String = reply[..n].iter().map(|&b| if b.is_ascii_graphic() || b == b' ' { b as char } else { '.' }).collect();
+        let raw: String = reply[..n]
+            .iter()
+            .map(|&b| {
+                if b.is_ascii_graphic() || b == b' ' {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
+            .collect();
         Err(format!("Réponse inattendue: {raw}"))
     }
 }

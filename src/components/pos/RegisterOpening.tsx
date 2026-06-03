@@ -1,93 +1,128 @@
 import * as React from "react";
-import { Banknote, CheckCircle, Plus, Settings } from "lucide-react";
-import { useSessionStore } from "../../stores/sessionStore";
+import { Banknote } from "lucide-react";
+import { closeSession, getOpenSession, openSession } from "../../api/posApi";
 import { useToastStore } from "../../api/toastStore";
+import { useSessionStore } from "../../stores/sessionStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
-  Description,
-  Footer,
-  Header,
-  Title,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 
 export default function RegisterOpening() {
-  const { registerOpen, setRegisterOpen, openingFund, setOpeningFund } = useSessionStore();
+  const { registerOpen, sessionId, setRegisterOpen, openingFund, currentUserId } = useSessionStore();
   const [showDialog, setShowDialog] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
   const [form, setForm] = React.useState<{ amount: number }>({
-    amount: openingFund / 1000, // Convert from millimes to Dinars for display
+    amount: openingFund / 1000,
   });
   const addToast = useToastStore((s) => s.addToast);
 
-  const openRegister = () => {
+  React.useEffect(() => {
+    void refreshSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function refreshSession() {
+    try {
+      const session = await getOpenSession();
+      if (session && session.status === "open") {
+        setRegisterOpen(true, session.id, session.opening_fund);
+      } else {
+        setRegisterOpen(false, undefined, 0);
+      }
+    } catch {
+      // Keep existing UI state if call fails.
+    }
+  }
+
+  function openRegisterDialog() {
     setForm({ amount: openingFund / 1000 });
     setShowDialog(true);
-  };
+  }
 
-  const closeRegister = () => {
-    setRegisterOpen(false, null, 0);
-    addToast("Caisse fermée", "info");
-  };
+  async function handleCloseRegister() {
+    setLoading(true);
+    try {
+      const existing = sessionId ? { id: sessionId } : await getOpenSession();
+      if (!existing) {
+        setRegisterOpen(false, undefined, 0);
+        addToast("Aucune session ouverte", "info");
+        return;
+      }
+      await closeSession(existing.id, openingFund);
+      setRegisterOpen(false, undefined, 0);
+      addToast("Caisse fermee", "info");
+    } catch (e) {
+      addToast(String(e), "error");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const handleSave = () => {
-    const amountInMillimes = Math.round(form.amount * 1000);
-    setRegisterOpen(true, `session_${Date.now()}`, amountInMillimes);
-    addToast(`Caisse ouverte avec un fonds de ${form.amount} D`, "success");
-    setShowDialog(false);
-  };
-
-  if (!registerOpen) {
-    return (
-      <Button onClick={openRegister} variant="outline" size="icon" className="tooltip">
-        <Banknote className="size-4" />
-        <div className="tooltip-content">Ouvrir la caisse</div>
-      </Button>
-    );
+  async function handleOpenRegister() {
+    setLoading(true);
+    try {
+      const amountInMillimes = Math.round(form.amount * 1000);
+      const session = await openSession(currentUserId || "1", amountInMillimes);
+      setRegisterOpen(true, session.id, session.opening_fund);
+      addToast(`Caisse ouverte avec un fonds de ${form.amount.toFixed(3)} D`, "success");
+      setShowDialog(false);
+    } catch (e) {
+      addToast(String(e), "error");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <>
-      <Button onClick={closeRegister} variant="outline" size="icon" className="tooltip">
-        <Banknote className="size-4 text-green-600" />
-        <div className="tooltip-content">Fermer la caisse</div>
+      <Button
+        onClick={registerOpen ? () => void handleCloseRegister() : openRegisterDialog}
+        variant="outline"
+        size="icon"
+        disabled={loading}
+        className="tooltip"
+      >
+        <Banknote className={`size-4 ${registerOpen ? "text-green-600" : ""}`} />
+        <div className="tooltip-content">{registerOpen ? "Fermer la caisse" : "Ouvrir la caisse"}</div>
       </Button>
-      
+
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Ouverture de caisse</DialogTitle>
-            <DialogDescription>
-              Entrez le fonds de caisse initial pour cette session.
-            </DialogDescription>
+            <DialogDescription>Entrez le fonds de caisse initial pour cette session.</DialogDescription>
           </DialogHeader>
-          <DialogContent>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="openingFund">Fonds de caisse initial (D)</Label>
-                <Input
-                  id="openingFund"
-                  type="number"
-                  step="0.001"
-                  value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: Number(e.target.value) || 0 })}
-                  placeholder="0.000"
-                  className="text-right"
-                />
-              </div>
-              
-              <div className="text-xs text-muted-foreground">
-                Fonds actuel: {openingFund / 1000} D
-              </div>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="openingFund">Fonds de caisse initial (D)</Label>
+              <Input
+                id="openingFund"
+                type="number"
+                step="0.001"
+                value={form.amount}
+                onChange={(e) => setForm({ amount: Number(e.target.value) || 0 })}
+                placeholder="0.000"
+                className="text-right"
+              />
             </div>
-          </DialogContent>
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)}>
               Annuler
             </Button>
-            <Button onClick={handleSave}>Ouvrir la caisse</Button>
+            <Button onClick={() => void handleOpenRegister()} disabled={loading}>
+              {loading ? "Ouverture..." : "Ouvrir la caisse"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

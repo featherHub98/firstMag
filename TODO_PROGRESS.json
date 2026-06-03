@@ -1,0 +1,246 @@
+{
+  "meta": {
+    "project": "FIRSTMAG",
+    "source_docs": [
+      "TODO_PROGRESS.txt",
+      "C:/Users/PC/Desktop/FIRSTMAG/FIRSTMAG/FIRSTMAG_APP_SCAN.md"
+    ],
+    "last_updated": "2026-06-02",
+    "status_model": [
+      "done",
+      "in_progress",
+      "remaining"
+    ]
+  },
+  "waves": [
+    {
+      "id": "wave_0",
+      "name": "Baseline lock",
+      "status": "done",
+      "items": [
+        {
+          "id": "w0_baseline_stable",
+          "title": "Keep stabilization baseline intact",
+          "status": "done"
+        },
+        {
+          "id": "w0_machine_tracker",
+          "title": "Convert TODO progress to machine-readable tracker",
+          "status": "done"
+        },
+        {
+          "id": "w0_scope_freeze",
+          "title": "Freeze parity scope (core/advanced/optional vertical)",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "wave_1",
+      "name": "UX middle ground foundation",
+      "status": "done",
+      "items": [
+        {
+          "id": "w1_legacy_navigation_map",
+          "title": "Legacy navigation map in modern shell",
+          "status": "done"
+        },
+        {
+          "id": "w1_legacy_aliases",
+          "title": "Legacy naming aliases in UI",
+          "status": "done"
+        },
+        {
+          "id": "w1_keyboard_profile",
+          "title": "Keyboard parity profile (F-keys, Enter/Esc, scanner-first)",
+          "status": "done"
+        },
+        {
+          "id": "w1_classic_density",
+          "title": "Classic density UI preset",
+          "status": "done"
+        },
+        {
+          "id": "w1_workflow_alignment",
+          "title": "Action placement and workflow sequencing alignment",
+          "status": "done"
+        },
+        {
+          "id": "w1_migration_helpers",
+          "title": "Migration helper panel with disable after onboarding",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "wave_2",
+      "name": "Core transactional parity",
+      "status": "done",
+      "items": [
+        {
+          "id": "w2_sales_lifecycle",
+          "title": "Sales lifecycle parity including transform matrix",
+          "status": "done"
+        },
+        {
+          "id": "w2_purchase_lifecycle",
+          "title": "Purchase lifecycle parity",
+          "status": "done"
+        },
+        {
+          "id": "w2_stock_lifecycle",
+          "title": "Stock lifecycle completion and valuation-ready structure",
+          "status": "done"
+        },
+        {
+          "id": "w2_stock_verif_import_crud",
+          "title": "Stock verification and barcode import update/delete/confirm parity",
+          "status": "done"
+        },
+        {
+          "id": "w2_stock_report_aggregation",
+          "title": "Stock report aggregation by article/depot and period",
+          "status": "done"
+        },
+        {
+          "id": "w2_pos_parity",
+          "title": "POS parity completion",
+          "status": "done"
+        },
+        {
+          "id": "w2_cash_lifecycle",
+          "title": "Cash opening/closing/movements/totals parity",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "wave_3",
+      "name": "Reference and authorization parity",
+      "status": "in_progress",
+      "items": [
+        {
+          "id": "w3_reference_masters",
+          "title": "Add missing legacy reference masters",
+          "status": "done"
+        },
+        {
+          "id": "w3_plu_barcode_models",
+          "title": "PLU and multi-use barcode model coverage",
+          "status": "in_progress"
+        },
+        {
+          "id": "w3_nomenclature_bom",
+          "title": "Nomenclature/BOM flows",
+          "status": "done"
+        },
+        {
+          "id": "w3_authorization",
+          "title": "Role and authorization matrix parity",
+          "status": "done"
+        },
+        {
+          "id": "w3_company_parameters",
+          "title": "Company and deep parameter management parity",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "wave_4",
+      "name": "CRM and loyalty parity",
+      "status": "done",
+      "items": [
+        {
+          "id": "w4_customer_profile_extension",
+          "title": "Extended customer profile and commercial controls",
+          "status": "done"
+        },
+        {
+          "id": "w4_history_kpis",
+          "title": "Purchase history KPIs and timeline fields",
+          "status": "done"
+        },
+        {
+          "id": "w4_reclamations",
+          "title": "Complaints and reclamation workflows",
+          "status": "done"
+        },
+        {
+          "id": "w4_followup_analytics",
+          "title": "Visit/follow-up workflows and top-client analytics",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "wave_5",
+      "name": "Reports and analytics parity",
+      "status": "done",
+      "items": [
+        {
+          "id": "w5_report_inventory",
+          "title": "Legacy report inventory and mapping",
+          "status": "done"
+        },
+        {
+          "id": "w5_document_printing",
+          "title": "Sales/purchase/returns/periodic print parity",
+          "status": "done"
+        },
+        {
+          "id": "w5_finance_settlement_reports",
+          "title": "Cheque/traite/payment ledger reports",
+          "status": "done"
+        },
+        {
+          "id": "w5_stock_barcode_reports",
+          "title": "Stock/barcode movement reporting parity",
+          "status": "done"
+        },
+        {
+          "id": "w5_management_dashboards",
+          "title": "Management dashboard/query parity",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "wave_6",
+      "name": "Hardware/sync/maintenance/verticals",
+      "status": "done",
+      "items": [
+        {
+          "id": "w6_hardware_config",
+          "title": "Hardware configuration parity",
+          "status": "done"
+        },
+        {
+          "id": "w6_fiscal_integration",
+          "title": "Fiscal integration parity (X/Z + PLU path)",
+          "status": "done"
+        },
+        {
+          "id": "w6_backup_and_sync",
+          "title": "Backup/restore/verification/site sync",
+          "status": "done"
+        },
+        {
+          "id": "w6_external_register_import",
+          "title": "External register article import and merge",
+          "status": "done"
+        },
+        {
+          "id": "w6_label_protocol",
+          "title": "Barcode label printing protocol support",
+          "status": "done"
+        },
+        {
+          "id": "w6_optional_verticals",
+          "title": "Optional vertical modules behind feature flags",
+          "status": "done"
+        }
+      ]
+    }
+  ]
+}

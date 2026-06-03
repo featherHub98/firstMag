@@ -10,7 +10,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function FamilyManagement() {
   const [families, setFamilies] = React.useState<ArticleFamily[]>([]);
@@ -155,10 +156,8 @@ export default function FamilyManagement() {
           
           <div className="space-y-1.5">
             <Label htmlFor="parent_id">Famille parente (optionnel)</Label>
-            <Select 
-              id="parent_id" 
-              value={form.parent_id || ""} 
-              onValueChange={(v) => setForm({ ...form, parent_id: v === "" ? null : v })}>
+            <Select value={form.parent_id || ""} 
+                onValueChange={(v) => setForm({ ...form, parent_id: v === "" ? null : v })}>
               <SelectTrigger><SelectValue placeholder="Aucune (famille racine)" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Aucune (famille racine)</SelectItem>
@@ -199,8 +198,4 @@ export default function FamilyManagement() {
   );
 }
 
-// Import Select component (we'll need to create this or use an existing one)
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Import Skeleton (we'll need to create this or use an existing one)
-import { Skeleton } from "@/components/ui/skeleton";

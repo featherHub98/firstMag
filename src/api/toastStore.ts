@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { toast as sonnerToast } from "sonner";
 
-export type ToastType = "success" | "error" | "info";
+export type ToastType = "success" | "error" | "info" | "warning";
 
 interface ToastState {
   addToast: (message: string, type?: ToastType) => void;
@@ -10,6 +10,7 @@ interface ToastState {
 export const useToastStore = create<ToastState>(() => ({
   addToast: (message, type = "info") => {
     if (type === "error") sonnerToast.error(message);
+    else if (type === "warning") sonnerToast.warning(message);
     else if (type === "success") sonnerToast.success(message);
     else sonnerToast(message);
   },

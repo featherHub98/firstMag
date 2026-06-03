@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { BarChart2, Search, RefreshCw } from "lucide-react";
-import { listStockReports, fmtDinars } from "../api/stockApi";
+import { BarChart2, RefreshCw } from "lucide-react";
+import { listStockReports } from "../api/stockApi";
 import { listArticles } from "../api/articleApi";
 import { listDepots } from "../api/depotApi";
 import { useToastStore } from "../api/toastStore";
@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+const NONE_OPTION = "__none__";
+
 export default function StockReports() {
   const [stockReports, setStockReports] = React.useState<StockReport[]>([]);
   const [articles, setArticles] = React.useState<Article[]>([]);
@@ -27,9 +29,9 @@ export default function StockReports() {
   const addToast = useToastStore((s) => s.addToast);
 
   React.useEffect(() => {
-    loadReports();
-    loadArticles();
-    loadDepots();
+    void loadReports();
+    void loadArticles();
+    void loadDepots();
   }, [filterDepotId, filterArticleId, dateFrom, dateTo]);
 
   async function loadReports() {
@@ -39,49 +41,56 @@ export default function StockReports() {
         depot_id: filterDepotId,
         article_id: filterArticleId,
         date_from: dateFrom || undefined,
-        date_to: dateTo || undefined
+        date_to: dateTo || undefined,
       });
       setStockReports(data);
-    } catch (e) { addToast(String(e), "error"); }
-    finally { setLoading(false); }
+    } catch (e) {
+      addToast(String(e), "error");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadArticles() {
     try {
       const data = await listArticles();
       setArticles(data);
-    } catch (e) { addToast(String(e), "error"); }
+    } catch (e) {
+      addToast(String(e), "error");
+    }
   }
 
   async function loadDepots() {
     try {
       const data = await listDepots();
       setDepots(data);
-    } catch (e) { addToast(String(e), "error"); }
+    } catch (e) {
+      addToast(String(e), "error");
+    }
   }
 
-  const handleResetFilters = () => {
+  function handleResetFilters() {
     setFilterDepotId(null);
     setFilterArticleId(null);
     setDateFrom("");
     setDateTo("");
-  };
+  }
 
   const columns: ColumnDef<StockReport>[] = [
     {
       accessorKey: "date",
       header: "Date",
       cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground font-mono">
+        <span className="text-xs font-mono text-muted-foreground">
           {new Date(row.original.date).toLocaleDateString("fr-FR")}
         </span>
       ),
     },
     {
       accessorKey: "depot_id",
-      header: "Dépôt",
+      header: "Depot",
       cell: ({ row }) => {
-        const depot = depots.find(d => d.id === row.original.depot_id);
+        const depot = depots.find((d) => d.id === row.original.depot_id);
         return depot ? <span>{depot.name}</span> : <span className="text-muted-foreground/40">ID: {row.original.depot_id}</span>;
       },
     },
@@ -89,7 +98,7 @@ export default function StockReports() {
       accessorKey: "article_id",
       header: "Article",
       cell: ({ row }) => {
-        const article = articles.find(a => a.id === row.original.article_id);
+        const article = articles.find((a) => a.id === row.original.article_id);
         return article ? (
           <span className="font-medium">{article.name}</span>
         ) : (
@@ -104,7 +113,7 @@ export default function StockReports() {
     },
     {
       accessorKey: "entries_quantity",
-      header: "Entrées",
+      header: "Entrees",
       cell: ({ row }) => <span className="tabular-nums text-green-600">{row.original.entries_quantity}</span>,
     },
     {
@@ -115,17 +124,17 @@ export default function StockReports() {
     {
       accessorKey: "final_quantity",
       header: "Stock final",
-      cell: ({ row }) => <span className="font-semibold tabular-nums">{row.original.final_quantity}</span>,
+      cell: ({ row }) => <span className="tabular-nums font-semibold">{row.original.final_quantity}</span>,
     },
     {
       accessorKey: "variance",
-      header: "Écart",
+      header: "Ecart",
       cell: ({ row }) => {
         const variance = row.original.variance;
-        const isPositive = variance >= 0;
         return (
-          <span className={`tabular-nums ${isPositive ? "text-green-600" : "text-red-600"}`}>
-            {variance} ({isPositive ? "+" : ""}{variance})
+          <span className={`tabular-nums ${variance >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {variance >= 0 ? "+" : ""}
+            {variance}
           </span>
         );
       },
@@ -133,10 +142,10 @@ export default function StockReports() {
   ];
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex h-full flex-col">
       <PageHeader
         title="Rapports de stock"
-        description="Analysez les mouvements et l'évolution de vos stocks par période"
+        description="Analysez les mouvements et l evolution des stocks par periode"
         actions={
           <div className="flex items-center gap-2">
             <Button onClick={handleResetFilters} variant="outline" size="icon">
@@ -146,20 +155,16 @@ export default function StockReports() {
         }
       />
 
-      {/* Filters */}
-      <div className="p-4 bg-card border-b">
+      <div className="border-b bg-card p-4">
         <div className="grid gap-4">
           <div className="grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="space-y-1.5">
-              <Label htmlFor="filterDepot">Dépôt</Label>
-              <Select 
-                id="filterDepot" 
-                value={filterDepotId || ""} 
-                onValueChange={(v) => setFilterDepotId(v === "" ? null : v)}>
-                <SelectTrigger><SelectValue placeholder="Tous les dépôts" /></SelectTrigger>
+              <Label htmlFor="filterDepot">Depot</Label>
+              <Select value={filterDepotId || NONE_OPTION} onValueChange={(v) => setFilterDepotId(v === NONE_OPTION ? null : v)}>
+                <SelectTrigger><SelectValue placeholder="Tous les depots" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tous les dépôts</SelectItem>
-                  {depots.map(depot => (
+                  <SelectItem value={NONE_OPTION}>Tous les depots</SelectItem>
+                  {depots.map((depot) => (
                     <SelectItem key={depot.id} value={depot.id}>
                       {depot.name}
                     </SelectItem>
@@ -167,17 +172,14 @@ export default function StockReports() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-1.5">
               <Label htmlFor="filterArticle">Article</Label>
-              <Select 
-                id="filterArticle" 
-                value={filterArticleId || ""} 
-                onValueChange={(v) => setFilterArticleId(v === "" ? null : v)}>
+              <Select value={filterArticleId || NONE_OPTION} onValueChange={(v) => setFilterArticleId(v === NONE_OPTION ? null : v)}>
                 <SelectTrigger><SelectValue placeholder="Tous les articles" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tous les articles</SelectItem>
-                  {articles.map(article => (
+                  <SelectItem value={NONE_OPTION}>Tous les articles</SelectItem>
+                  {articles.map((article) => (
                     <SelectItem key={article.id} value={article.id}>
                       {article.name} ({article.code})
                     </SelectItem>
@@ -185,28 +187,27 @@ export default function StockReports() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-1.5">
               <Label htmlFor="dateFrom">Du</Label>
               <Input id="dateFrom" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
             </div>
-            
+
             <div className="space-y-1.5">
               <Label htmlFor="dateTo">Au</Label>
               <Input id="dateTo" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </div>
           </div>
-          
-          <div className="flex justify-end space-x-3 mt-4">
+
+          <div className="mt-4 flex justify-end space-x-3">
             <Button variant="outline" onClick={handleResetFilters}>
-              Réinitialiser
+              Reinitialiser
             </Button>
             <Button onClick={loadReports}>Appliquer les filtres</Button>
           </div>
         </div>
       </div>
 
-      {/* Reports table */}
       <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
           <div className="space-y-3">
@@ -218,12 +219,12 @@ export default function StockReports() {
             columns={columns}
             data={stockReports}
             searchColumn="search"
-            searchPlaceholder="Rechercher par article ou dépôt..."
+            searchPlaceholder="Rechercher par article ou depot..."
             emptyState={
               <EmptyState
                 icon={<BarChart2 className="size-6" />}
                 title="Aucun rapport de stock"
-                description="Aucun rapport de stock ne correspond aux filtres sélectionnés."
+                description="Aucun rapport de stock ne correspond aux filtres selectionnes."
                 action={<Button onClick={handleResetFilters}><RefreshCw className="size-4" /> Tout afficher</Button>}
               />
             }

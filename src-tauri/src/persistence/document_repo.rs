@@ -1,28 +1,26 @@
-use sqlx::{SqlitePool, Row};
-use crate::domain::{Document, DocumentLine, DomainResult, DomainError};
+use crate::domain::{Document, DocumentLine, DomainError, DomainResult};
 use chrono::Utc;
+use sqlx::{Row, SqlitePool};
 
 pub async fn list(pool: &SqlitePool, doc_type: Option<&str>) -> DomainResult<Vec<Document>> {
     let rows = if let Some(dt) = doc_type {
         sqlx::query_as::<_, Document>(
-            "SELECT * FROM documents WHERE doc_type = ? ORDER BY created_at DESC"
+            "SELECT * FROM documents WHERE doc_type = ? ORDER BY created_at DESC",
         )
-        .bind(dt)
+        .bind(&dt)
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query_as::<_, Document>(
-            "SELECT * FROM documents ORDER BY created_at DESC"
-        )
-        .fetch_all(pool)
-        .await?
+        sqlx::query_as::<_, Document>("SELECT * FROM documents ORDER BY created_at DESC")
+            .fetch_all(pool)
+            .await?
     };
     Ok(rows)
 }
 
 pub async fn get_by_id(pool: &SqlitePool, id: &str) -> DomainResult<Document> {
     let doc = sqlx::query_as::<_, Document>("SELECT * FROM documents WHERE id = ?")
-        .bind(id)
+        .bind(&id)
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| DomainError::NotFound(format!("Document {id}")))?;
@@ -31,9 +29,9 @@ pub async fn get_by_id(pool: &SqlitePool, id: &str) -> DomainResult<Document> {
 
 pub async fn get_lines(pool: &SqlitePool, document_id: &str) -> DomainResult<Vec<DocumentLine>> {
     let rows = sqlx::query_as::<_, DocumentLine>(
-        "SELECT * FROM document_lines WHERE document_id = ? ORDER BY id"
+        "SELECT * FROM document_lines WHERE document_id = ? ORDER BY id",
     )
-    .bind(document_id)
+    .bind(&document_id)
     .fetch_all(pool)
     .await?;
     Ok(rows)
@@ -56,9 +54,9 @@ pub async fn create_with_lines(
     .bind(&doc.status)
     .bind(&doc.partner_id)
     .bind(&doc.partner_name)
-    .bind(doc.total_ht)
-    .bind(doc.total_tax)
-    .bind(doc.total_ttc)
+    .bind(&doc.total_ht)
+    .bind(&doc.total_tax)
+    .bind(&doc.total_ttc)
     .bind(&doc.notes)
     .bind(&doc.created_at)
     .bind(&doc.updated_at)
@@ -74,11 +72,11 @@ pub async fn create_with_lines(
         .bind(&line.document_id)
         .bind(&line.article_id)
         .bind(&line.article_name)
-        .bind(line.quantity)
-        .bind(line.unit_price)
-        .bind(line.tax_rate)
-        .bind(line.total_ht)
-        .bind(line.total_ttc)
+        .bind(&line.quantity)
+        .bind(&line.unit_price)
+        .bind(&line.tax_rate)
+        .bind(&line.total_ht)
+        .bind(&line.total_ttc)
         .execute(&mut *tx)
         .await?;
     }
@@ -89,14 +87,12 @@ pub async fn create_with_lines(
 
 pub async fn update_status(pool: &SqlitePool, id: &str, status: &str) -> DomainResult<()> {
     let now = Utc::now();
-    let result = sqlx::query(
-        "UPDATE documents SET status = ?, updated_at = ? WHERE id = ?"
-    )
-    .bind(status)
-    .bind(&now)
-    .bind(id)
-    .execute(pool)
-    .await?;
+    let result = sqlx::query("UPDATE documents SET status = ?, updated_at = ? WHERE id = ?")
+        .bind(&status)
+        .bind(&now)
+        .bind(&id)
+        .execute(pool)
+        .await?;
     if result.rows_affected() == 0 {
         return Err(DomainError::NotFound(format!("Document {id}")));
     }
@@ -105,7 +101,7 @@ pub async fn update_status(pool: &SqlitePool, id: &str, status: &str) -> DomainR
 
 pub async fn get_next_doc_number(pool: &SqlitePool, doc_type: &str) -> DomainResult<String> {
     let row = sqlx::query("SELECT prefix, next_number FROM document_series WHERE doc_type = ?")
-        .bind(doc_type)
+        .bind(&doc_type)
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| DomainError::NotFound(format!("Series for {doc_type}")))?;
@@ -115,9 +111,11 @@ pub async fn get_next_doc_number(pool: &SqlitePool, doc_type: &str) -> DomainRes
     let number = format!("{prefix}{num:06}");
 
     sqlx::query("UPDATE document_series SET next_number = next_number + 1 WHERE doc_type = ?")
-        .bind(doc_type)
+        .bind(&doc_type)
         .execute(pool)
         .await?;
 
     Ok(number)
 }
+
+

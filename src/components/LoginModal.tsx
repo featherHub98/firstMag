@@ -1,8 +1,9 @@
 import * as React from "react";
-import { LogOut, Delete, Receipt } from "lucide-react";
+import { Delete, LogOut, Receipt } from "lucide-react";
 import { useUiStore } from "../stores/uiStore";
 import { useSessionStore } from "../stores/sessionStore";
 import { useToastStore } from "../api/toastStore";
+import { loginUser } from "../api/userApi";
 import {
   Dialog,
   DialogContent,
@@ -13,11 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const USERS = [
-  { code: "1", name: "Admin", pin: "1234", role: "Admin" },
-  { code: "2", name: "Caissier", pin: "0000", role: "Caissier" },
-];
-
 export default function LoginModal() {
   const loginOpen = useUiStore((s) => s.loginOpen);
   const setLoginOpen = useUiStore((s) => s.setLoginOpen);
@@ -25,9 +21,10 @@ export default function LoginModal() {
   const currentUser = useSessionStore((s) => s.currentUserName);
   const addToast = useToastStore((s) => s.addToast);
   const [code, setCode] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
-    if (currentUser === "Invité") setCode("");
+    if (currentUser === "Invite") setCode("");
   }, [currentUser, loginOpen]);
 
   function press(k: string) {
@@ -37,31 +34,34 @@ export default function LoginModal() {
     else setCode((p) => p + k);
   }
 
-  function handleLogin() {
-    const user = USERS.find((u) => u.pin === code);
-    if (user) {
-      setUser(user.code, user.name);
+  async function handleLogin() {
+    setBusy(true);
+    try {
+      const user = await loginUser(code);
+      setUser(user.id, user.name, user.role, user.permissions);
       setLoginOpen(false);
       setCode("");
-      addToast(`Connecté: ${user.name}`, "success");
-    } else {
+      addToast(`Connecte: ${user.name}`, "success");
+    } catch {
       addToast("Code PIN incorrect", "error");
       setCode("");
+    } finally {
+      setBusy(false);
     }
   }
 
   function handleLogout() {
-    setUser("", "Invité");
+    setUser("", "Invite", "guest", []);
     setLoginOpen(true);
-    addToast("Déconnecté", "info");
+    addToast("Deconnecte", "info");
   }
 
-  const open = currentUser === "Invité" || loginOpen;
+  const open = currentUser === "Invite" || loginOpen;
 
   return (
     <Dialog open={open} onOpenChange={setLoginOpen}>
       <DialogContent className="max-w-sm p-0 overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
-        {currentUser === "Invité" ? (
+        {currentUser === "Invite" ? (
           <div className="p-6 space-y-5">
             <DialogHeader className="items-center text-center space-y-3">
               <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground mx-auto">
@@ -85,12 +85,7 @@ export default function LoginModal() {
 
               <div className="grid grid-cols-3 gap-2">
                 {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((k) => (
-                  <Button
-                    key={k}
-                    variant="outline"
-                    className="h-14 text-xl font-semibold"
-                    onClick={() => press(k)}
-                  >
+                  <Button key={k} variant="outline" className="h-14 text-xl font-semibold" onClick={() => press(k)}>
                     {k}
                   </Button>
                 ))}
@@ -109,10 +104,10 @@ export default function LoginModal() {
                 variant="default"
                 size="lg"
                 className="w-full h-14 text-lg font-semibold"
-                disabled={code.length < 1}
-                onClick={handleLogin}
+                disabled={code.length < 1 || busy}
+                onClick={() => void handleLogin()}
               >
-                Entrer
+                {busy ? "Connexion..." : "Entrer"}
               </Button>
             </div>
           </div>
@@ -124,12 +119,12 @@ export default function LoginModal() {
               </Avatar>
               <div>
                 <DialogTitle>{currentUser}</DialogTitle>
-                <DialogDescription>Connecté</DialogDescription>
+                <DialogDescription>Connecte</DialogDescription>
               </div>
             </DialogHeader>
             <Button onClick={handleLogout} variant="destructive" className="w-full">
               <LogOut className="size-4" />
-              Déconnexion
+              Deconnexion
             </Button>
           </div>
         )}

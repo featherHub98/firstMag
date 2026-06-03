@@ -17,7 +17,22 @@ export interface HeldCart {
   id: string;
   name: string;
   lines: CartLine[];
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_balance: number;
+  customer_credit_limit: number;
+  global_discount_millimes: number;
+  defer_payment: boolean;
   createdAt: string;
+}
+
+export interface HoldCartContext {
+  customer_id?: string | null;
+  customer_name?: string | null;
+  customer_balance?: number;
+  customer_credit_limit?: number;
+  global_discount_millimes?: number;
+  defer_payment?: boolean;
 }
 
 interface CartState {
@@ -29,8 +44,8 @@ interface CartState {
   updateQuantity: (index: number, qty: number) => void;
   removeLine: (index: number) => void;
   clearCart: () => void;
-  holdCart: (name: string) => string;
-  restoreCart: (id: string) => boolean;
+  holdCart: (name: string, context?: HoldCartContext) => string;
+  restoreCart: (id: string) => HeldCart | null;
   deleteHeldCart: (id: string) => void;
 }
 
@@ -116,7 +131,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     }),
   removeLine: (index) => set((s) => recalc(s.lines.filter((_, i) => i !== index))),
   clearCart: () => set({ lines: [], total_ht: 0, total_ttc: 0 }),
-  holdCart: (name) => {
+  holdCart: (name, context) => {
     const { lines } = get();
     if (lines.length === 0) return "";
     
@@ -124,6 +139,12 @@ export const useCartStore = create<CartState>((set, get) => ({
       id: Math.random().toString(36).substr(2, 9),
       name: name || `Ticket ${new Date().toLocaleTimeString()}`,
       lines: [...lines],
+      customer_id: context?.customer_id ?? null,
+      customer_name: context?.customer_name ?? null,
+      customer_balance: context?.customer_balance ?? 0,
+      customer_credit_limit: context?.customer_credit_limit ?? 0,
+      global_discount_millimes: context?.global_discount_millimes ?? 0,
+      defer_payment: context?.defer_payment ?? false,
       createdAt: new Date().toISOString()
     };
     
@@ -140,7 +161,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     const { heldCarts } = get();
     const heldCart = heldCarts.find(cart => cart.id === id);
     
-    if (!heldCart) return false;
+    if (!heldCart) return null;
     
     // Clear current cart and restore held cart
     set({
@@ -149,7 +170,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       total_ttc: heldCart.lines.reduce((sum, line) => sum + line.total_ttc, 0)
     });
     
-    return true;
+    return heldCart;
   },
   deleteHeldCart: (id) => {
     set((s) => ({

@@ -24,5 +24,46 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(include_str!("migrations/002_references.sql"))
         .execute(pool)
         .await?;
+    sqlx::query(include_str!("migrations/003_salespersons.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/004_cash_movements.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/005_reference_parity.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/006_rayon_gondola.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/007_auth_seed.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/008_role_permissions.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/009_commercial_taxonomy.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/010_countries.sql"))
+        .execute(pool)
+        .await?;
+    if let Err(err) = sqlx::query(include_str!("migrations/011_partner_country.sql"))
+        .execute(pool)
+        .await
+    {
+        if !err.to_string().contains("duplicate column name: country_id") {
+            return Err(err);
+        }
+    }
+    sqlx::query(include_str!("migrations/012_article_codes.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/013_article_bom.sql"))
+        .execute(pool)
+        .await?;
+    sqlx::query(include_str!("migrations/014_wave4_crm.sql"))
+        .execute(pool)
+        .await?;
     Ok(())
 }

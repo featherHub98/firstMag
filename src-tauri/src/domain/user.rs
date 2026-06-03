@@ -17,6 +17,15 @@ pub struct Role {
     pub permissions: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoginResult {
+    pub id: String,
+    pub code: String,
+    pub name: String,
+    pub role: String,
+    pub permissions: Vec<String>,
+}
+
 impl User {
     pub fn new(code: &str, name: &str, role: &str) -> Self {
         Self {

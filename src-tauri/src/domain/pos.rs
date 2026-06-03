@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +48,42 @@ pub struct PosTicket {
     pub total_ttc: i64,
     pub payment_status: String,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CashMovement {
+    pub id: String,
+    pub session_id: String,
+    pub movement_type: String,
+    pub amount: i64,
+    pub description: String,
+    pub user_id: String,
+    pub user_name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashMovementSummary {
+    pub opening_fund: i64,
+    pub total_in: i64,
+    pub total_out: i64,
+    pub current_cash: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CashSessionTotals {
+    pub session_id: String,
+    pub register_id: String,
+    pub cashier_id: String,
+    pub status: String,
+    pub opening_fund: i64,
+    pub closing_fund: Option<i64>,
+    pub total_in: i64,
+    pub total_out: i64,
+    pub theoretical_closing: i64,
+    pub variance: i64,
+    pub opened_at: DateTime<Utc>,
+    pub closed_at: Option<DateTime<Utc>>,
 }
 
 impl PosSession {
