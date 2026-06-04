@@ -28,10 +28,16 @@ export default function LoginModal() {
   }, [currentUser, loginOpen]);
 
   function press(k: string) {
+    if (k === "back") {
+      setCode((p) => p.slice(0, -1));
+      return;
+    }
+    if (k === "clear") {
+      setCode("");
+      return;
+    }
     if (code.length >= 4) return;
-    if (k === "back") setCode((p) => p.slice(0, -1));
-    else if (k === "clear") setCode("");
-    else setCode((p) => p + k);
+    setCode((p) => p + k);
   }
 
   async function handleLogin() {
@@ -57,6 +63,41 @@ export default function LoginModal() {
   }
 
   const open = currentUser === "Invite" || loginOpen;
+
+  React.useEffect(() => {
+    if (!open || currentUser !== "Invite") return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (busy) return;
+      const key = event.key;
+
+      if (key >= "0" && key <= "9") {
+        event.preventDefault();
+        press(key);
+        return;
+      }
+
+      if (key === "Backspace") {
+        event.preventDefault();
+        press("back");
+        return;
+      }
+
+      if (key === "Delete") {
+        event.preventDefault();
+        press("clear");
+        return;
+      }
+
+      if (key === "Enter" && code.length > 0) {
+        event.preventDefault();
+        void handleLogin();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, currentUser, busy, code]);
 
   return (
     <Dialog open={open} onOpenChange={setLoginOpen}>

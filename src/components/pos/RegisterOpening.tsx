@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Banknote } from "lucide-react";
+import { listCashiers, listRegisters } from "../../api";
 import { closeSession, getOpenSession, openSession } from "../../api/posApi";
 import { useToastStore } from "../../api/toastStore";
 import { useSessionStore } from "../../stores/sessionStore";
@@ -70,7 +71,13 @@ export default function RegisterOpening() {
     setLoading(true);
     try {
       const amountInMillimes = Math.round(form.amount * 1000);
-      const session = await openSession(currentUserId || "1", amountInMillimes);
+      const [cashierRows, registerRows] = await Promise.all([listCashiers(), listRegisters()]);
+      const activeCashier = cashierRows.find((c) => c.active) ?? cashierRows[0];
+      const activeRegister = registerRows.find((r) => r.active) ?? registerRows[0];
+      const resolvedCashierId = activeCashier?.id ?? currentUserId ?? "1";
+      const resolvedRegisterId = activeRegister?.id ?? "1";
+
+      const session = await openSession(resolvedCashierId, amountInMillimes, resolvedRegisterId);
       setRegisterOpen(true, session.id, session.opening_fund);
       addToast(`Caisse ouverte avec un fonds de ${form.amount.toFixed(3)} D`, "success");
       setShowDialog(false);

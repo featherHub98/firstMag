@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function FamilyManagement() {
+  const ROOT_PARENT_VALUE = "__root__";
   const [families, setFamilies] = React.useState<ArticleFamily[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [showForm, setShowForm] = React.useState(false);
@@ -24,6 +25,10 @@ export default function FamilyManagement() {
     parent_id: null,
   });
   const addToast = useToastStore((s) => s.addToast);
+  const availableParents = React.useMemo(
+    () => families.filter((family) => family.id !== editId),
+    [families, editId],
+  );
 
   React.useEffect(() => { load(); }, []);
 
@@ -155,16 +160,21 @@ export default function FamilyManagement() {
           </div>
           
           <div className="space-y-1.5">
-            <Label htmlFor="parent_id">Famille parente (optionnel)</Label>
-            <Select value={form.parent_id || ""} 
-                onValueChange={(v) => setForm({ ...form, parent_id: v === "" ? null : v })}>
-              <SelectTrigger><SelectValue placeholder="Aucune (famille racine)" /></SelectTrigger>
+            <Label htmlFor="parent_family">Famille parente (optionnel)</Label>
+            <Select
+              value={form.parent_id ?? ROOT_PARENT_VALUE}
+              onValueChange={(v) => setForm({ ...form, parent_id: v === ROOT_PARENT_VALUE ? null : v })}
+            >
+              <SelectTrigger id="parent_family">
+                <SelectValue placeholder="Aucune (famille racine)" />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Aucune (famille racine)</SelectItem>
-                {/* In a real implementation, we would populate this with actual families */}
-                <SelectItem value="1">Alimentation</SelectItem>
-                <SelectItem value="2">Textile</SelectItem>
-                <SelectItem value="3">Électronique</SelectItem>
+                <SelectItem value={ROOT_PARENT_VALUE}>Aucune (famille racine)</SelectItem>
+                {availableParents.map((family) => (
+                  <SelectItem key={family.id} value={family.id}>
+                    {family.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

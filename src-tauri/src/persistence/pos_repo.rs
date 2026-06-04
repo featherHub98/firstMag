@@ -6,6 +6,60 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+async fn ensure_default_pos_refs(pool: &SqlitePool) -> DomainResult<()> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO cashiers (id, code, name, email, phone, active, created_at, updated_at)
+         VALUES ('1', 'CAI001', 'Caissier principal', '', '', 1, datetime('now'), datetime('now'))",
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO registers (id, code, name, location, active, created_at, updated_at)
+         VALUES ('1', 'REG001', 'Caisse principale', 'Magasin principal', 1, datetime('now'), datetime('now'))",
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn resolve_register_id(pool: &SqlitePool, requested: &str) -> DomainResult<String> {
+    if let Some(id) = sqlx::query_scalar::<_, String>(
+        "SELECT id FROM registers WHERE id = ? OR code = ? ORDER BY active DESC LIMIT 1",
+    )
+    .bind(requested)
+    .bind(requested)
+    .fetch_optional(pool)
+    .await?
+    {
+        return Ok(id);
+    }
+
+    sqlx::query_scalar::<_, String>("SELECT id FROM registers ORDER BY active DESC, code LIMIT 1")
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| DomainError::InvalidOperation("Caisse introuvable".into()))
+}
+
+async fn resolve_cashier_id(pool: &SqlitePool, requested: &str) -> DomainResult<String> {
+    if let Some(id) = sqlx::query_scalar::<_, String>(
+        "SELECT id FROM cashiers WHERE id = ? OR code = ? ORDER BY active DESC LIMIT 1",
+    )
+    .bind(requested)
+    .bind(requested)
+    .fetch_optional(pool)
+    .await?
+    {
+        return Ok(id);
+    }
+
+    sqlx::query_scalar::<_, String>("SELECT id FROM cashiers ORDER BY active DESC, code LIMIT 1")
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| DomainError::InvalidOperation("Caissier introuvable".into()))
+}
+
 pub async fn get_open_session(pool: &SqlitePool) -> DomainResult<Option<PosSession>> {
     let session =
         sqlx::query_as::<_, PosSession>("SELECT * FROM pos_sessions WHERE status = 'open' LIMIT 1")
@@ -20,30 +74,18 @@ pub async fn open_session(
     cashier_id: &str,
     fund: i64,
 ) -> DomainResult<PosSession> {
+    ensure_default_pos_refs(pool).await?;
+
     let existing = get_open_session(pool).await?;
     if existing.is_some() {
         return Err(DomainError::InvalidOperation(
             "Une session est déjà ouverte".into(),
         ));
     }
-    let register_exists =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM registers WHERE id = ?")
-            .bind(&register_id)
-            .fetch_one(pool)
-            .await?;
-    if register_exists == 0 {
-        return Err(DomainError::InvalidOperation("Caisse introuvable".into()));
-    }
+    let resolved_register_id = resolve_register_id(pool, register_id).await?;
+    let resolved_cashier_id = resolve_cashier_id(pool, cashier_id).await?;
 
-    let cashier_exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM cashiers WHERE id = ?")
-        .bind(&cashier_id)
-        .fetch_one(pool)
-        .await?;
-    if cashier_exists == 0 {
-        return Err(DomainError::InvalidOperation("Caissier introuvable".into()));
-    }
-
-    let session = PosSession::open(register_id, cashier_id, fund);
+    let session = PosSession::open(&resolved_register_id, &resolved_cashier_id, fund);
     sqlx::query(
         "INSERT INTO pos_sessions (id, register_id, cashier_id, opening_fund, status, ticket_count, total_sales, opened_at)
          VALUES (?, ?, ?, ?, 'open', 0, 0, ?)"

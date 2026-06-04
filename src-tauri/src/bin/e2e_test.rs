@@ -1,11 +1,21 @@
 #![allow(clippy::needless_borrows_for_generic_args)]
 
 use firstmag_lib::domain::{
-    CreateArticle, CreateDocument, CreateDocumentLine, CreatePartner, DocumentType, PartnerType,
-    UpdateArticle,
+    CreateAccountingCategory, CreateAdvancedTaxRate, CreateArticle, CreateArticleFamily,
+    CreateBank, CreateCashier, CreateCountry, CreateCurrency, CreateDepot, CreateDocument,
+    CreateDocumentLine, CreateGondola, CreatePartner, CreatePaymentMethod, CreateProductRange,
+    CreateRayon, CreateRegister, CreateSalesperson, CreateTariffCategory, CreateUnitOfMeasure,
+    DocumentType, PartnerType, UpdateAccountingCategory, UpdateAdvancedTaxRate, UpdateArticle,
+    UpdateArticleFamily, UpdateBank, UpdateCashier, UpdateCountry, UpdateCurrency, UpdateDepot,
+    UpdateGondola, UpdatePaymentMethod, UpdateProductRange, UpdateRayon, UpdateRegister,
+    UpdateSalesperson, UpdateTariffCategory, UpdateUnitOfMeasure,
 };
 use firstmag_lib::persistence::{
-    article_repo, document_repo, partner_repo, pos_repo, report_repo, stock_repo,
+    accounting_category_repo, advanced_tax_rate_repo, article_repo, bank_repo, cashier_repo,
+    country_repo, currency_repo, depot_repo, document_repo, family_repo, gondola_repo,
+    partner_repo, payment_method_repo, pos_repo, product_range_repo, rayon_repo, register_repo,
+    report_repo, salesperson_repo, settings_repo, stock_repo, tariff_category_repo,
+    unit_of_measure_repo,
 };
 use firstmag_lib::reports::{
     invoice::{generate_invoice, InvoiceData},
@@ -14,6 +24,7 @@ use firstmag_lib::reports::{
 };
 use firstmag_lib::service::DocumentService;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -106,6 +117,7 @@ async fn main() {
     run_document_tests(&mut ctx, &partners, &article_ids).await;
     run_report_tests(&mut ctx).await;
     run_pdf_tests(&mut ctx).await;
+    run_settings_crud_tests(&mut ctx).await;
 
     let total = ctx.passed + ctx.failed;
     println!("\n===========================");
@@ -812,6 +824,21 @@ async fn run_pos_tests(ctx: &mut TestContext) {
             updated.status, updated.closing_fund
         ),
     );
+
+    let fallback_session = pos_repo::open_session(&ctx.pool, "unknown_register", "u_admin", 10_000)
+        .await
+        .expect("open with fallback refs");
+    ctx.record(
+        "open session with fallback cashier/register ids",
+        fallback_session.status == "open",
+        format!(
+            "register={} cashier={}",
+            fallback_session.register_id, fallback_session.cashier_id
+        ),
+    );
+    let _ = pos_repo::close_session(&ctx.pool, &fallback_session.id, 10_000)
+        .await
+        .expect("close fallback session");
 }
 
 async fn run_document_tests(
@@ -1084,6 +1111,662 @@ async fn run_pdf_tests(ctx: &mut TestContext) {
             format!("{}", p.display()),
         );
     }
+}
+
+async fn run_settings_crud_tests(ctx: &mut TestContext) {
+    ctx.section("8. Settings CRUD (Config)");
+
+    let mut entries = HashMap::new();
+    entries.insert("company_name".to_string(), "FIRST MAG E2E".to_string());
+    entries.insert("company_phone".to_string(), "+21670000123".to_string());
+    settings_repo::set_app_settings(&ctx.pool, &entries)
+        .await
+        .expect("set app settings");
+    let settings = settings_repo::get_app_settings(
+        &ctx.pool,
+        &["company_name".to_string(), "company_phone".to_string()],
+    )
+    .await
+    .expect("get app settings");
+    ctx.record(
+        "settings set/get",
+        settings.get("company_name") == Some(&"FIRST MAG E2E".to_string())
+            && settings.get("company_phone") == Some(&"+21670000123".to_string()),
+        format!(
+            "company_name={:?} company_phone={:?}",
+            settings.get("company_name"),
+            settings.get("company_phone")
+        ),
+    );
+
+    let series = settings_repo::list_document_series(&ctx.pool)
+        .await
+        .expect("list document series");
+    if let Some(original) = series.first().cloned() {
+        let updated_prefix = format!("{}E2", original.prefix);
+        let updated_next_number = original.next_number + 10;
+        settings_repo::update_document_series(
+            &ctx.pool,
+            &original.id,
+            &updated_prefix,
+            updated_next_number,
+            &original.format,
+        )
+        .await
+        .expect("update document series");
+
+        let updated_ok = settings_repo::list_document_series(&ctx.pool)
+            .await
+            .expect("reload document series")
+            .iter()
+            .find(|row| row.id == original.id)
+            .map(|row| row.prefix == updated_prefix && row.next_number == updated_next_number)
+            .unwrap_or(false);
+        ctx.record(
+            "document series update",
+            updated_ok,
+            format!("id={} next={}", original.id, updated_next_number),
+        );
+
+        let _ = settings_repo::update_document_series(
+            &ctx.pool,
+            &original.id,
+            &original.prefix,
+            original.next_number,
+            &original.format,
+        )
+        .await;
+    } else {
+        ctx.record(
+            "document series update",
+            false,
+            "no document series rows found".to_string(),
+        );
+    }
+
+    let tag = Uuid::new_v4().simple().to_string();
+    let short = &tag[..6];
+
+    let root_family = family_repo::create(
+        &ctx.pool,
+        CreateArticleFamily {
+            name: format!("Famille E2E {short}"),
+            parent_id: None,
+        },
+    )
+    .await
+    .expect("create root family");
+    let sub_family = family_repo::create(
+        &ctx.pool,
+        CreateArticleFamily {
+            name: format!("Sous-famille E2E {short}"),
+            parent_id: Some(root_family.id.clone()),
+        },
+    )
+    .await
+    .expect("create sub family");
+    let family_search = family_repo::search(&ctx.pool, short)
+        .await
+        .expect("search families");
+    ctx.record(
+        "family create + search",
+        family_search.iter().any(|f| f.id == root_family.id)
+            && family_search.iter().any(|f| f.id == sub_family.id),
+        format!("matches={}", family_search.len()),
+    );
+    let updated_sub_family = family_repo::update(
+        &ctx.pool,
+        UpdateArticleFamily {
+            id: sub_family.id.clone(),
+            name: Some(format!("Sous-famille E2E MAJ {short}")),
+            parent_id: Some(root_family.id.clone()),
+            active: None,
+        },
+    )
+    .await
+    .expect("update sub family");
+    ctx.record(
+        "family update",
+        updated_sub_family.name.contains("MAJ"),
+        format!("name={}", updated_sub_family.name),
+    );
+    family_repo::delete(&ctx.pool, &sub_family.id)
+        .await
+        .expect("delete sub family");
+    family_repo::delete(&ctx.pool, &root_family.id)
+        .await
+        .expect("delete root family");
+    ctx.record(
+        "family delete",
+        family_repo::search(&ctx.pool, short)
+            .await
+            .expect("search family after delete")
+            .is_empty(),
+        "family rows removed".to_string(),
+    );
+
+    let unit = unit_of_measure_repo::create(
+        &ctx.pool,
+        CreateUnitOfMeasure {
+            name: format!("Unite E2E {short}"),
+            symbol: format!("u{short}"),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create unit");
+    let updated_unit = unit_of_measure_repo::update(
+        &ctx.pool,
+        UpdateUnitOfMeasure {
+            id: unit.id.clone(),
+            name: Some(format!("Unite E2E MAJ {short}")),
+            symbol: Some(format!("um{short}")),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update unit");
+    unit_of_measure_repo::delete(&ctx.pool, &unit.id)
+        .await
+        .expect("delete unit");
+    ctx.record(
+        "unit CRUD",
+        updated_unit.name.contains("MAJ")
+            && unit_of_measure_repo::get_by_id(&ctx.pool, &unit.id)
+                .await
+                .is_err(),
+        format!("id={}", unit.id),
+    );
+
+    let salesperson = salesperson_repo::create(
+        &ctx.pool,
+        CreateSalesperson {
+            code: format!("V{short}"),
+            first_name: "E2E".to_string(),
+            last_name: format!("Sales{short}"),
+            email: format!("vendeur-{short}@e2e.tn"),
+            phone: "+21670000222".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create salesperson");
+    let updated_salesperson = salesperson_repo::update(
+        &ctx.pool,
+        UpdateSalesperson {
+            id: salesperson.id.clone(),
+            code: Some(format!("V{short}M")),
+            first_name: Some("E2E-MAJ".to_string()),
+            last_name: None,
+            email: None,
+            phone: Some("+21670000223".to_string()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update salesperson");
+    salesperson_repo::delete(&ctx.pool, &salesperson.id)
+        .await
+        .expect("delete salesperson");
+    ctx.record(
+        "salesperson CRUD",
+        updated_salesperson.first_name == "E2E-MAJ"
+            && salesperson_repo::get_by_id(&ctx.pool, &salesperson.id)
+                .await
+                .is_err(),
+        format!("id={}", salesperson.id),
+    );
+
+    let depot = depot_repo::create(
+        &ctx.pool,
+        CreateDepot {
+            code: format!("DEP{short}"),
+            name: format!("Depot E2E {short}"),
+            address: "Zone test".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create depot");
+    let updated_depot = depot_repo::update(
+        &ctx.pool,
+        UpdateDepot {
+            id: depot.id.clone(),
+            code: None,
+            name: Some(format!("Depot E2E MAJ {short}")),
+            address: None,
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update depot");
+    ctx.record(
+        "depot create/update",
+        updated_depot.name.contains("MAJ"),
+        format!("id={}", depot.id),
+    );
+
+    let rayon = rayon_repo::create(
+        &ctx.pool,
+        CreateRayon {
+            code: format!("RY{short}"),
+            name: format!("Rayon E2E {short}"),
+            depot_id: depot.id.clone(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create rayon");
+    let updated_rayon = rayon_repo::update(
+        &ctx.pool,
+        UpdateRayon {
+            id: rayon.id.clone(),
+            code: None,
+            name: Some(format!("Rayon E2E MAJ {short}")),
+            depot_id: Some(depot.id.clone()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update rayon");
+    ctx.record(
+        "rayon create/update",
+        updated_rayon.name.contains("MAJ"),
+        format!("id={}", rayon.id),
+    );
+
+    let gondola = gondola_repo::create(
+        &ctx.pool,
+        CreateGondola {
+            code: format!("GD{short}"),
+            name: format!("Gondole E2E {short}"),
+            depot_id: depot.id.clone(),
+            rayon_id: rayon.id.clone(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create gondola");
+    let updated_gondola = gondola_repo::update(
+        &ctx.pool,
+        UpdateGondola {
+            id: gondola.id.clone(),
+            code: None,
+            name: Some(format!("Gondole E2E MAJ {short}")),
+            depot_id: Some(depot.id.clone()),
+            rayon_id: Some(rayon.id.clone()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update gondola");
+    gondola_repo::delete(&ctx.pool, &gondola.id)
+        .await
+        .expect("delete gondola");
+    rayon_repo::delete(&ctx.pool, &rayon.id)
+        .await
+        .expect("delete rayon");
+    depot_repo::delete(&ctx.pool, &depot.id)
+        .await
+        .expect("delete depot");
+    ctx.record(
+        "gondola/rayon/depot delete chain",
+        updated_gondola.name.contains("MAJ")
+            && gondola_repo::get_by_id(&ctx.pool, &gondola.id).await.is_err()
+            && rayon_repo::get_by_id(&ctx.pool, &rayon.id).await.is_err()
+            && depot_repo::get_by_id(&ctx.pool, &depot.id).await.is_err(),
+        "all hierarchy rows removed".to_string(),
+    );
+
+    let bank = bank_repo::create(
+        &ctx.pool,
+        CreateBank {
+            code: format!("BK{short}"),
+            name: format!("Banque E2E {short}"),
+            address: "Adresse banque".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create bank");
+    let updated_bank = bank_repo::update(
+        &ctx.pool,
+        UpdateBank {
+            id: bank.id.clone(),
+            code: None,
+            name: Some(format!("Banque E2E MAJ {short}")),
+            address: None,
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update bank");
+    bank_repo::delete(&ctx.pool, &bank.id).await.expect("delete bank");
+    ctx.record(
+        "bank CRUD",
+        updated_bank.name.contains("MAJ") && bank_repo::get_by_id(&ctx.pool, &bank.id).await.is_err(),
+        format!("id={}", bank.id),
+    );
+
+    let currency = currency_repo::create(
+        &ctx.pool,
+        CreateCurrency {
+            code: format!("E2{short}"),
+            name: format!("Devise E2E {short}"),
+            symbol: format!("S{short}"),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create currency");
+    let updated_currency = currency_repo::update(
+        &ctx.pool,
+        UpdateCurrency {
+            id: currency.id.clone(),
+            code: None,
+            name: Some(format!("Devise E2E MAJ {short}")),
+            symbol: None,
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update currency");
+    currency_repo::delete(&ctx.pool, &currency.id)
+        .await
+        .expect("delete currency");
+    ctx.record(
+        "currency CRUD",
+        updated_currency.name.contains("MAJ")
+            && currency_repo::get_by_id(&ctx.pool, &currency.id)
+                .await
+                .is_err(),
+        format!("id={}", currency.id),
+    );
+
+    let payment_method = payment_method_repo::create(
+        &ctx.pool,
+        CreatePaymentMethod {
+            code: format!("PM{short}"),
+            name: format!("Reglement E2E {short}"),
+            description: "Methode test".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create payment method");
+    let updated_payment_method = payment_method_repo::update(
+        &ctx.pool,
+        UpdatePaymentMethod {
+            id: payment_method.id.clone(),
+            code: None,
+            name: Some(format!("Reglement E2E MAJ {short}")),
+            description: Some("Description MAJ".to_string()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update payment method");
+    payment_method_repo::delete(&ctx.pool, &payment_method.id)
+        .await
+        .expect("delete payment method");
+    ctx.record(
+        "payment method CRUD",
+        updated_payment_method.name.contains("MAJ")
+            && payment_method_repo::get_by_id(&ctx.pool, &payment_method.id)
+                .await
+                .is_err(),
+        format!("id={}", payment_method.id),
+    );
+
+    let cashier = cashier_repo::create(
+        &ctx.pool,
+        CreateCashier {
+            code: format!("CA{short}"),
+            name: format!("Caissier E2E {short}"),
+            email: format!("caisse-{short}@e2e.tn"),
+            phone: "+21670000333".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create cashier");
+    let updated_cashier = cashier_repo::update(
+        &ctx.pool,
+        UpdateCashier {
+            id: cashier.id.clone(),
+            code: None,
+            name: Some(format!("Caissier E2E MAJ {short}")),
+            email: None,
+            phone: Some("+21670000334".to_string()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update cashier");
+    cashier_repo::delete(&ctx.pool, &cashier.id)
+        .await
+        .expect("delete cashier");
+    ctx.record(
+        "cashier CRUD",
+        updated_cashier.name.contains("MAJ")
+            && cashier_repo::get_by_id(&ctx.pool, &cashier.id)
+                .await
+                .is_err(),
+        format!("id={}", cashier.id),
+    );
+
+    let register = register_repo::create(
+        &ctx.pool,
+        CreateRegister {
+            code: format!("RG{short}"),
+            name: format!("Caisse E2E {short}"),
+            location: "Point test".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create register");
+    let updated_register = register_repo::update(
+        &ctx.pool,
+        UpdateRegister {
+            id: register.id.clone(),
+            code: None,
+            name: Some(format!("Caisse E2E MAJ {short}")),
+            location: Some("Point test MAJ".to_string()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update register");
+    register_repo::delete(&ctx.pool, &register.id)
+        .await
+        .expect("delete register");
+    ctx.record(
+        "register CRUD",
+        updated_register.name.contains("MAJ")
+            && register_repo::get_by_id(&ctx.pool, &register.id)
+                .await
+                .is_err(),
+        format!("id={}", register.id),
+    );
+
+    let range = product_range_repo::create(
+        &ctx.pool,
+        CreateProductRange {
+            code: format!("PR{short}"),
+            name: format!("Gamme E2E {short}"),
+            description: "Description test".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create product range");
+    let updated_range = product_range_repo::update(
+        &ctx.pool,
+        UpdateProductRange {
+            id: range.id.clone(),
+            code: None,
+            name: Some(format!("Gamme E2E MAJ {short}")),
+            description: None,
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update product range");
+    product_range_repo::delete(&ctx.pool, &range.id)
+        .await
+        .expect("delete product range");
+    ctx.record(
+        "product range CRUD",
+        updated_range.name.contains("MAJ")
+            && product_range_repo::get_by_id(&ctx.pool, &range.id)
+                .await
+                .is_err(),
+        format!("id={}", range.id),
+    );
+
+    let tariff = tariff_category_repo::create(
+        &ctx.pool,
+        CreateTariffCategory {
+            code: format!("TF{short}"),
+            name: format!("Tarif E2E {short}"),
+            discount_rate: 9,
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create tariff");
+    let updated_tariff = tariff_category_repo::update(
+        &ctx.pool,
+        UpdateTariffCategory {
+            id: tariff.id.clone(),
+            code: None,
+            name: Some(format!("Tarif E2E MAJ {short}")),
+            discount_rate: Some(11),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update tariff");
+    tariff_category_repo::delete(&ctx.pool, &tariff.id)
+        .await
+        .expect("delete tariff");
+    ctx.record(
+        "tariff category CRUD",
+        updated_tariff.discount_rate == 11
+            && tariff_category_repo::get_by_id(&ctx.pool, &tariff.id)
+                .await
+                .is_err(),
+        format!("id={}", tariff.id),
+    );
+
+    let accounting = accounting_category_repo::create(
+        &ctx.pool,
+        CreateAccountingCategory {
+            code: format!("AC{short}"),
+            name: format!("Compta E2E {short}"),
+            account_number: "777777".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create accounting category");
+    let updated_accounting = accounting_category_repo::update(
+        &ctx.pool,
+        UpdateAccountingCategory {
+            id: accounting.id.clone(),
+            code: None,
+            name: Some(format!("Compta E2E MAJ {short}")),
+            account_number: Some("777778".to_string()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update accounting category");
+    accounting_category_repo::delete(&ctx.pool, &accounting.id)
+        .await
+        .expect("delete accounting category");
+    ctx.record(
+        "accounting category CRUD",
+        updated_accounting.account_number == "777778"
+            && accounting_category_repo::get_by_id(&ctx.pool, &accounting.id)
+                .await
+                .is_err(),
+        format!("id={}", accounting.id),
+    );
+
+    let advanced_tax = advanced_tax_rate_repo::create(
+        &ctx.pool,
+        CreateAdvancedTaxRate {
+            code: format!("AT{short}"),
+            name: format!("TVA E2E {short}"),
+            rate: 13,
+            surcharge_rate: 1,
+            withholding_rate: 2,
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create advanced tax rate");
+    let updated_advanced_tax = advanced_tax_rate_repo::update(
+        &ctx.pool,
+        UpdateAdvancedTaxRate {
+            id: advanced_tax.id.clone(),
+            code: None,
+            name: Some(format!("TVA E2E MAJ {short}")),
+            rate: Some(14),
+            surcharge_rate: Some(2),
+            withholding_rate: Some(3),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update advanced tax rate");
+    advanced_tax_rate_repo::delete(&ctx.pool, &advanced_tax.id)
+        .await
+        .expect("delete advanced tax rate");
+    ctx.record(
+        "advanced tax rate CRUD",
+        updated_advanced_tax.rate == 14
+            && advanced_tax_rate_repo::get_by_id(&ctx.pool, &advanced_tax.id)
+                .await
+                .is_err(),
+        format!("id={}", advanced_tax.id),
+    );
+
+    let country = country_repo::create(
+        &ctx.pool,
+        CreateCountry {
+            code: format!("C{short}"),
+            name: format!("Pays E2E {short}"),
+            iso2: "E2".to_string(),
+            phone_code: "+999".to_string(),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("create country");
+    let updated_country = country_repo::update(
+        &ctx.pool,
+        UpdateCountry {
+            id: country.id.clone(),
+            code: None,
+            name: Some(format!("Pays E2E MAJ {short}")),
+            iso2: Some("E3".to_string()),
+            phone_code: Some("+998".to_string()),
+            active: Some(true),
+        },
+    )
+    .await
+    .expect("update country");
+    country_repo::delete(&ctx.pool, &country.id)
+        .await
+        .expect("delete country");
+    ctx.record(
+        "country CRUD",
+        updated_country.iso2 == "E3" && country_repo::get_by_id(&ctx.pool, &country.id).await.is_err(),
+        format!("id={}", country.id),
+    );
 }
 
 
