@@ -8,10 +8,20 @@ import {
   Receipt,
   PanelTop,
   PanelLeft,
+  Loader2,
 } from "lucide-react";
 import { useUiStore } from "../stores/uiStore";
 import { useSessionStore } from "../stores/sessionStore";
 import { useToastStore } from "../api/toastStore";
+import {
+  getDashboardStats,
+  getOpenSession,
+  listArticleFamilies,
+  listCashiers,
+  listDepots,
+  listDocumentSeries,
+  listRegisters,
+} from "../api";
 import {
   Sidebar,
   SidebarContent,
@@ -42,6 +52,13 @@ import LoginModal from "./LoginModal";
 import { keyboardRouteMap, legacyNavigationMap } from "@/config/legacyNavigation";
 
 const flatNavItems = legacyNavigationMap.flatMap((group) => group.items);
+
+function settleWithTimeout<T>(promise: Promise<T>, timeoutMs = 6000): Promise<void> {
+  return Promise.race<void>([
+    promise.then(() => undefined).catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+}
 
 function AppSidebar() {
   const { state } = useSidebar();
@@ -262,8 +279,12 @@ export default function Layout() {
   const keyboardProfile = useUiStore((s) => s.keyboardProfile);
   const scannerFirstFocus = useUiStore((s) => s.scannerFirstFocus);
   const navigationMode = useUiStore((s) => s.navigationMode);
+  const currentUserId = useSessionStore((s) => s.currentUserId);
   const permissions = useSessionStore((s) => s.currentUserPermissions);
+  const appHydrating = useSessionStore((s) => s.appHydrating);
+  const setAppHydrating = useSessionStore((s) => s.setAppHydrating);
   const navigate = useNavigate();
+  const hydratedForUserRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (!keyboardProfile) return undefined;
@@ -310,10 +331,44 @@ export default function Layout() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [permissions, keyboardProfile, navigate, scannerFirstFocus]);
 
+  React.useEffect(() => {
+    if (!currentUserId) {
+      hydratedForUserRef.current = null;
+      setAppHydrating(false);
+      return;
+    }
+    if (hydratedForUserRef.current === currentUserId) return;
+
+    let cancelled = false;
+    setAppHydrating(true);
+
+    const warmupTasks: Array<Promise<unknown>> = [
+      getDashboardStats(),
+      getOpenSession(),
+      listCashiers(),
+      listRegisters(),
+      listDepots(),
+      listDocumentSeries(),
+      listArticleFamilies(),
+    ];
+
+    void Promise.all(warmupTasks.map((task) => settleWithTimeout(task)))
+      .catch(() => undefined)
+      .finally(() => {
+        if (cancelled) return;
+        hydratedForUserRef.current = currentUserId;
+        setAppHydrating(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, setAppHydrating]);
+
   return (
     <div
       className={cn(
-        "flex h-full w-full overflow-hidden",
+        "relative flex h-full w-full overflow-hidden",
         darkMode && "dark",
         density === "classic" && "density-classic",
       )}
@@ -330,6 +385,17 @@ export default function Layout() {
           <StatusBar />
         </div>
       </SidebarProvider>
+      {appHydrating && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-lg border bg-card px-5 py-4 shadow">
+            <Loader2 className="size-5 animate-spin text-primary" />
+            <div>
+              <p className="text-sm font-medium">Chargement en cours</p>
+              <p className="text-xs text-muted-foreground">Initialisation des pages principales...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ export default function LoginModal() {
   const loginOpen = useUiStore((s) => s.loginOpen);
   const setLoginOpen = useUiStore((s) => s.setLoginOpen);
   const setUser = useSessionStore((s) => s.setUser);
+  const setAppHydrating = useSessionStore((s) => s.setAppHydrating);
   const currentUser = useSessionStore((s) => s.currentUserName);
   const addToast = useToastStore((s) => s.addToast);
   const [code, setCode] = React.useState("");
@@ -44,6 +45,7 @@ export default function LoginModal() {
     setBusy(true);
     try {
       const user = await loginUser(code);
+      setAppHydrating(true);
       setUser(user.id, user.name, user.role, user.permissions);
       setLoginOpen(false);
       setCode("");
@@ -57,6 +59,7 @@ export default function LoginModal() {
   }
 
   function handleLogout() {
+    setAppHydrating(false);
     setUser("", "Invite", "guest", []);
     setLoginOpen(true);
     addToast("Deconnecte", "info");

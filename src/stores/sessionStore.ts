@@ -5,6 +5,7 @@ interface SessionState {
   currentUserName: string;
   currentUserRole: string;
   currentUserPermissions: string[];
+  appHydrating: boolean;
   registerOpen: boolean;
   sessionId: string | null;
   openingFund: number;
@@ -12,6 +13,7 @@ interface SessionState {
   customerName: string | null;
   customerBalance: number;
   setUser: (id: string, name: string, role?: string, permissions?: string[]) => void;
+  setAppHydrating: (loading: boolean) => void;
   hasPermission: (permission: string) => boolean;
   setRegisterOpen: (open: boolean, sessionId?: string, openingFund?: number) => void;
   clear: () => void;
@@ -24,6 +26,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   currentUserName: "Invite",
   currentUserRole: "guest",
   currentUserPermissions: [],
+  appHydrating: false,
   registerOpen: false,
   sessionId: null,
   openingFund: 0,
@@ -37,6 +40,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       currentUserRole: role,
       currentUserPermissions: permissions,
     }),
+  setAppHydrating: (loading) => set({ appHydrating: loading }),
   hasPermission: (permission: string): boolean => {
     const state = get();
     if (state.currentUserPermissions.includes("*")) return true;
@@ -50,6 +54,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       currentUserName: "Invite",
       currentUserRole: "guest",
       currentUserPermissions: [],
+      appHydrating: false,
       registerOpen: false,
       sessionId: null,
       openingFund: 0,

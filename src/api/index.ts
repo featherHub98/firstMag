@@ -1,6 +1,7 @@
 export * from "./articleApi";
 export * from "./articleCodeApi";
 export * from "./partnerApi";
+export * from "./familyApi";
 export * from "./documentApi";
 export * from "./posApi";
 export * from "./stockApi";
